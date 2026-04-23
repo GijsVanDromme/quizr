@@ -257,6 +257,7 @@ export default function QuizEditor() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const API_BASE = import.meta.env.VITE_API_URL || '';
+  const [error, setError] = useState('');
 
   // Drag and drop
   const [dragIndex, setDragIndex] = useState(null);
@@ -271,22 +272,38 @@ export default function QuizEditor() {
   }, [id, navigate]);
 
   const fetchQuiz = async () => {
-    const res = await fetch(`${API_BASE}/api/quizzes/${id}`);
-    if (!res.ok) return navigate('/admin');
-    const data = await res.json();
-    setQuiz(data);
+    try {
+      const res = await fetch(`${API_BASE}/api/quizzes/${id}`);
+      if (!res.ok) {
+        setError(`Kan quiz niet laden (status ${res.status}). Controleer je server URL (VITE_API_URL).`);
+        return;
+      }
+      const data = await res.json();
+      setQuiz(data);
+    } catch (e) {
+      setError('Kon geen verbinding maken met de server. Is de client env var VITE_API_URL juist en is de server online?');
+    }
   };
 
   const saveQuiz = async () => {
-    setSaving(true);
-    await fetch(`${API_BASE}/api/quizzes/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(quiz),
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_BASE}/api/quizzes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quiz),
+      });
+      setSaving(false);
+      if (!res.ok) {
+        setError(`Opslaan mislukt (status ${res.status}).`);
+        return;
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setSaving(false);
+      setError('Kon niet opslaan: geen verbinding met de server.');
+    }
   };
 
   const addQuestion = (type = 'multiple_choice') => {
@@ -341,6 +358,18 @@ export default function QuizEditor() {
     setDragIndex(null);
     setDragOverIndex(null);
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900 p-6">
+        <div className="max-w-xl w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+          <p className="text-quiz-red font-bold mb-2">Er ging iets mis</p>
+          <p className="text-gray-300 mb-4">{error}</p>
+          <Link to="/admin" className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl inline-block">Terug naar dashboard</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!quiz) {
     return (
