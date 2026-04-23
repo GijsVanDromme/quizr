@@ -11,6 +11,7 @@ export function SocketProvider({ children }) {
     const baseUrl = import.meta.env.VITE_API_URL || window.location.origin;
     const s = io(baseUrl, {
       transports: ['websocket', 'polling'],
+      path: '/socket.io/',
     });
 
     s.on('connect', () => setConnected(true));

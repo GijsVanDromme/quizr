@@ -58,25 +58,49 @@ io.on('connection', (socket) => {
     });
   });
 
-  // PLAYER: Join game
+  // PLAYER: Join game (also handles rejoin mid-game)
   socket.on('player:join', ({ pin, name, emoji }, callback) => {
+    console.log(`[DEBUG] player:join attempt - pin: ${pin}, name: ${name}, socket: ${socket.id}`);
     const session = gameManager.getSession(pin);
-    if (!session) return callback({ error: 'Game niet gevonden' });
-    if (session.state !== 'lobby') return callback({ error: 'Game is al begonnen' });
+    if (!session) {
+      console.log(`[DEBUG] Session not found for pin ${pin}`);
+      return callback({ error: 'Game niet gevonden' });
+    }
 
     const result = session.addPlayer(socket.id, name, emoji);
-    if (result.error) return callback({ error: result.error });
+    if (result.error) {
+      console.log(`[DEBUG] addPlayer error: ${result.error}, session state: ${session.state}`);
+      return callback({ error: result.error });
+    }
 
     gameManager.socketToSession.set(socket.id, pin);
     socket.join(`game:${pin}`);
-    console.log(`[Game] ${name} (${emoji}) joined game ${pin}`);
+    console.log(`[DEBUG] Socket ${socket.id} joined room game:${pin}`);
 
-    // Notify host
-    io.to(session.hostSocketId).emit('game:player-joined', {
-      players: session.getPlayers()
-    });
+    if (result.rejoined) {
+      console.log(`[Game] ${name} rejoined game ${pin} (state: ${session.state})`);
+      callback({ ...result, state: session.state });
 
-    callback(result);
+      // Re-send current game state so player screen updates immediately
+      console.log(`[DEBUG] Re-sending state ${session.state} to rejoined player`);
+      if (session.state === 'question') {
+        const currentQ = session.getCurrentQuestion();
+        console.log(`[DEBUG] Sending question:`, currentQ?.questionText);
+        socket.emit('game:question', currentQ);
+      } else if (session.state === 'leaderboard') {
+        socket.emit('game:leaderboard', { leaderboard: session.getLeaderboard() });
+      } else if (session.state === 'results') {
+        socket.emit('game:question-results', session.getQuestionResults());
+      } else if (session.state === 'finished') {
+        socket.emit('game:finished', { leaderboard: session.getLeaderboard() });
+      }
+    } else {
+      console.log(`[Game] ${name} (${emoji}) joined game ${pin} (fresh join)`);
+      io.to(session.hostSocketId).emit('game:player-joined', {
+        players: session.getPlayers()
+      });
+      callback(result);
+    }
   });
 
   // HOST: Start the game (first question)
@@ -111,14 +135,19 @@ io.on('connection', (socket) => {
 
   // HOST: Next question
   socket.on('host:next', (callback) => {
+    console.log('[DEBUG] host:next received');
     const session = gameManager.getSessionBySocket(socket.id);
     if (!session) return callback({ error: 'No active session' });
 
+    console.log('[DEBUG] Session found, pin:', session.pin, 'players in room:', session.players.size);
     if (session.timer) clearTimeout(session.timer);
 
     const result = session.nextQuestion();
+    console.log('[DEBUG] nextQuestion result:', result.state);
 
     if (result.state === 'question') {
+      console.log('[DEBUG] Emitting game:question to room game:' + session.pin);
+      console.log('[DEBUG] Question:', result.question?.questionText);
       io.to(`game:${session.pin}`).emit('game:question', result.question);
 
       const timeLimit = (result.question.timeLimit || 20) * 1000;
@@ -130,8 +159,10 @@ io.on('connection', (socket) => {
         }
       }, timeLimit + 1000);
     } else if (result.state === 'leaderboard') {
+      console.log('[DEBUG] Emitting game:leaderboard to room game:' + session.pin);
       io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard: result.leaderboard });
     } else if (result.state === 'finished') {
+      console.log('[DEBUG] Emitting game:finished to room game:' + session.pin);
       io.to(`game:${session.pin}`).emit('game:finished', {
         leaderboard: result.leaderboard
       });
@@ -142,13 +173,19 @@ io.on('connection', (socket) => {
 
   // HOST: Show results for current question
   socket.on('host:show-results', (callback) => {
+    console.log('[DEBUG] host:show-results received');
     const session = gameManager.getSessionBySocket(socket.id);
-    if (!session) return callback({ error: 'No active session' });
+    if (!session) {
+      console.log('[DEBUG] No session found for host:show-results');
+      return callback({ error: 'No active session' });
+    }
 
     if (session.timer) clearTimeout(session.timer);
     session.state = 'results';
 
     const results = session.getQuestionResults();
+    console.log('[DEBUG] Emitting game:question-results to room game:' + session.pin);
+    console.log('[DEBUG] Results:', results.questionText, 'correct:', results.correctCount);
     io.to(`game:${session.pin}`).emit('game:question-results', results);
     callback(results);
   });
@@ -242,6 +279,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });

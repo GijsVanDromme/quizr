@@ -4,6 +4,7 @@ export class GameSession {
     this.hostSocketId = hostSocketId;
     this.pin = Math.floor(100000 + Math.random() * 900000).toString();
     this.players = new Map();
+    this.disconnectedPlayers = new Map(); // Store disconnected players by name for rejoin
     this.state = 'lobby'; // lobby | question | results | leaderboard | finished
     this.currentQuestionIndex = -1;
     this.answerCount = 0;
@@ -14,11 +15,33 @@ export class GameSession {
   }
 
   addPlayer(socketId, name, emoji) {
-    if (this.state !== 'lobby') return { error: 'Game already started' };
-    
+    const normalizedName = name.trim().toLowerCase();
+
+    // Check if rejoining (either in current players or disconnected players)
+    if (this.state !== 'lobby') {
+      // Check current players first
+      for (const [oldId, player] of this.players) {
+        if (player.name.toLowerCase() === normalizedName) {
+          const updatedPlayer = { ...player, id: socketId };
+          this.players.delete(oldId);
+          this.players.set(socketId, updatedPlayer);
+          return { playerId: socketId, playerName: name, rejoined: true };
+        }
+      }
+      // Check disconnected players
+      if (this.disconnectedPlayers.has(normalizedName)) {
+        const player = this.disconnectedPlayers.get(normalizedName);
+        const updatedPlayer = { ...player, id: socketId };
+        this.disconnectedPlayers.delete(normalizedName);
+        this.players.set(socketId, updatedPlayer);
+        return { playerId: socketId, playerName: name, rejoined: true };
+      }
+      return { error: 'Game is al begonnen' };
+    }
+
     const player = {
       id: socketId,
-      name,
+      name: name.trim(),
       emoji: emoji || '😀',
       score: 0,
       streak: 0,
@@ -27,11 +50,16 @@ export class GameSession {
       totalAnswers: 0,
     };
     this.players.set(socketId, player);
-    return { playerId: socketId, playerName: name };
+    return { playerId: socketId, playerName: name.trim() };
   }
 
   removePlayer(socketId) {
-    this.players.delete(socketId);
+    const player = this.players.get(socketId);
+    if (player) {
+      // Store in disconnected players for rejoin
+      this.disconnectedPlayers.set(player.name.toLowerCase(), player);
+      this.players.delete(socketId);
+    }
   }
 
   getPlayers() {
@@ -152,25 +180,20 @@ export class GameSession {
       };
     }
 
-    // Calculate score
+    // Calculate score - simple 100 points per correct answer
     let points = 0;
     if (question.type === 'free_type' && correctCount > 0) {
-      // Award partial points even if not fully correct
+      // Award 100 points per correct answer in free type
+      points = correctCount * 100;
       if (isCorrect) {
         player.streak++;
       } else {
         player.streak = 0;
       }
-      const basePoints = partialScore;
-      const timeBonus = Math.round(Math.max(0, (1 - timeTaken / timeLimit)) * 500);
-      const streakBonus = isCorrect ? Math.min(player.streak - 1, 3) * 100 : 0;
-      points = basePoints + timeBonus + streakBonus;
     } else if (isCorrect) {
+      // Award 100 points for correct multiple choice
+      points = 100;
       player.streak++;
-      const basePoints = 1000;
-      const timeBonus = Math.round(Math.max(0, (1 - timeTaken / timeLimit)) * 500);
-      const streakBonus = Math.min(player.streak - 1, 3) * 100; // Max 300 streak bonus
-      points = basePoints + timeBonus + streakBonus;
     } else {
       player.streak = 0;
     }

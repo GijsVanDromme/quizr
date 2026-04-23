@@ -124,12 +124,13 @@ export default function PlayerJoin() {
         return;
       }
 
-      sessionStorage.setItem('player', JSON.stringify({
+      localStorage.setItem('player', JSON.stringify({
         id: response.playerId,
         name: response.playerName,
         emoji,
         pin
       }));
+      sessionStorage.setItem('freshJoin', 'true');
 
       navigate('/play/game');
     });

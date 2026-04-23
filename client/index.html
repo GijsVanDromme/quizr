@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#6366f1" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Quiz 2026" />
+    <meta name="apple-mobile-web-app-title" content="Meteor Quiz 2026" />
     <link rel="manifest" href="/manifest.json" />
     <title>Quiz 2026</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,10 +19,12 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      // Unregister any existing service workers to prevent cached old code
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(r => r.unregister());
         });
+        caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
       }
     </script>
   </body>

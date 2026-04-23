@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Users, Play, SkipForward, Trophy, BarChart3,
-  CheckCircle, X, Clock, Wifi, ArrowLeft, Eye, FileText, Type, ZoomIn,
+  CheckCircle, X, Clock, Wifi, ArrowLeft, Eye, FileText, ZoomIn,
   Volume2, VolumeX, Pause, Play as PlayIcon
 } from 'lucide-react';
 
@@ -32,7 +32,11 @@ function ImageLightbox({ imageUrl, onClose }) {
 }
 
 function LobbyScreen({ pin, players, onStart, quizTitle }) {
-  const joinUrl = `${window.location.origin}/play?pin=${pin}`;
+  // Use network IP if accessing from localhost
+  const origin = window.location.origin.includes('localhost') 
+    ? `http://192.168.0.169:5173` 
+    : window.location.origin;
+  const joinUrl = `${origin}/play?pin=${pin}`;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
@@ -49,7 +53,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
             {pin}
           </div>
           <p className="text-gray-500 text-sm mt-3">
-            Ga naar <span className="text-primary-400 font-mono">{window.location.origin}/play</span>
+            Ga naar <span className="text-primary-400 font-mono">{origin}/play</span>
           </p>
         </div>
       </div>
@@ -102,6 +106,20 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
   const optionShapes = ['△', '◇', '○', '□'];
+  const optionShapesCustom = [
+    <svg viewBox="0 0 100 100" className="w-8 h-8">
+      <polygon points="50,15 85,85 15,85" fill="white" />
+    </svg>,
+    <svg viewBox="0 0 100 100" className="w-8 h-8">
+      <polygon points="50,15 85,50 50,85 15,50" fill="white" />
+    </svg>,
+    <svg viewBox="0 0 100 100" className="w-8 h-8">
+      <circle cx="50" cy="50" r="35" fill="white" />
+    </svg>,
+    <svg viewBox="0 0 100 100" className="w-8 h-8">
+      <rect x="15" y="15" width="70" height="70" fill="white" />
+    </svg>
+  ];
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
   return (
@@ -181,19 +199,13 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
               key={i}
               className={`${optionColors[i]} p-6 rounded-2xl text-center text-xl font-bold shadow-lg flex items-center justify-center gap-3`}
             >
-              <span className="text-2xl opacity-60">{optionShapes[i]}</span>
+              {optionShapesCustom[i]}
               {opt}
             </div>
           ))}
         </div>
       )}
 
-      {question.type === 'free_type' && (
-        <div className="text-center text-gray-400 text-xl">
-          <Type className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          Spelers typen hun antwoord...
-        </div>
-      )}
 
       {question.type === 'leaderboard_slide' && (
         <div className="text-center text-gray-400 text-xl">
@@ -218,6 +230,25 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
 
 function ResultsScreen({ results, onShowLeaderboard }) {
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
+  const optionShapes = ['△', '◇', '○', '□'];
+  const optionShapesCustom = [
+    // Triangle - bredere driehoek
+    <svg viewBox="0 0 100 100" className="w-full h-full">
+      <polygon points="50,15 85,85 15,85" fill="white" />
+    </svg>,
+    // Diamond - ruit die even breed is
+    <svg viewBox="0 0 100 100" className="w-full h-full">
+      <polygon points="50,15 85,50 50,85 15,50" fill="white" />
+    </svg>,
+    // Circle - perfecte cirkel
+    <svg viewBox="0 0 100 100" className="w-full h-full">
+      <circle cx="50" cy="50" r="35" fill="white" />
+    </svg>,
+    // Square - perfect vierkant
+    <svg viewBox="0 0 100 100" className="w-full h-full">
+      <rect x="15" y="15" width="70" height="70" fill="white" />
+    </svg>
+  ];
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
@@ -231,20 +262,18 @@ function ResultsScreen({ results, onShowLeaderboard }) {
           {results.options?.map((opt, i) => {
             const isCorrect = results.correctAnswer === i;
             const count = results.distribution?.[i] || 0;
-            const pct = results.totalPlayers > 0 ? (count / results.totalPlayers) * 100 : 0;
 
             return (
-              <div key={i} className="relative">
+              <div key={i}>
                 <div className={`flex items-center gap-4 p-4 rounded-xl border-2 ${isCorrect ? 'border-quiz-green bg-quiz-green/10' : 'border-white/10 bg-white/5'}`}>
+                  <div className={`w-16 h-16 rounded flex items-center justify-center flex-shrink-0 ${optionColors[i]}`}>
+                    {optionShapesCustom[i]}
+                  </div>
                   {isCorrect && <CheckCircle className="w-6 h-6 text-quiz-green flex-shrink-0" />}
                   {!isCorrect && <X className="w-6 h-6 text-gray-500 flex-shrink-0" />}
                   <span className="flex-1 font-medium">{opt}</span>
                   <span className="font-bold text-lg">{count}</span>
                 </div>
-                <div
-                  className={`absolute bottom-0 left-0 h-1 rounded-b-xl transition-all ${optionColors[i]}`}
-                  style={{ width: `${pct}%` }}
-                />
               </div>
             );
           })}
@@ -253,11 +282,12 @@ function ResultsScreen({ results, onShowLeaderboard }) {
 
       {results.type === 'free_type' && (
         <div className="w-full max-w-2xl mb-8">
-          <p className="text-gray-400 mb-3">
-            Correct antwoord(en): <span className="text-quiz-green font-bold">
+          <div className="bg-quiz-green/20 border-2 border-quiz-green/40 rounded-2xl p-8 mb-6 text-center">
+            <p className="text-gray-300 text-sm mb-3 uppercase tracking-wide">Correcte antwoorden</p>
+            <p className="text-quiz-green font-black text-3xl">
               {Array.isArray(results.correctAnswer) ? results.correctAnswer.join(', ') : results.correctAnswer}
-            </span>
-          </p>
+            </p>
+          </div>
           <div className="space-y-2">
             {results.answers?.map((a, i) => (
               <div
@@ -389,6 +419,29 @@ export default function HostGame() {
   const [currentQuestionNum, setCurrentQuestionNum] = useState(0);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const audioRef = useRef(null);
+
+  // Initialize audio once
+  useEffect(() => {
+    const audio = new Audio('/bg_music.mp3');
+    audio.loop = true;
+    audio.volume = 0.4;
+    audioRef.current = audio;
+    return () => {
+      audio.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  // Play/pause based on toggle
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (musicEnabled) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
+  }, [musicEnabled]);
 
   // Store quiz ID for preview
   useEffect(() => {
@@ -493,15 +546,20 @@ export default function HostGame() {
   }, [socket]);
 
   const showResults = useCallback(() => {
+    console.log('[DEBUG Host] showResults called, question type:', currentQuestion?.type);
     if (currentQuestion?.type === 'info_slide') {
+      console.log('[DEBUG Host] Info slide detected, calling nextQuestion directly');
       nextQuestion();
       return;
     }
     if (currentQuestion?.type === 'leaderboard_slide') {
+      console.log('[DEBUG Host] Leaderboard slide detected, calling showLeaderboard directly');
       showLeaderboard();
       return;
     }
+    console.log('[DEBUG Host] Emitting host:show-results');
     socket.emit('host:show-results', (r) => {
+      console.log('[DEBUG Host] Received results response:', r);
       setResults(r);
       setGameState('results');
     });

@@ -44,6 +44,26 @@ router.put('/:id', (req, res) => {
   res.json(updated);
 });
 
+// Duplicate question
+router.post('/:quizId/questions/:questionId/duplicate', (req, res) => {
+  const quiz = getQuiz(req.params.quizId);
+  if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+  
+  const questionIndex = quiz.questions.findIndex(q => q.id === req.params.questionId);
+  if (questionIndex === -1) return res.status(404).json({ error: 'Question not found' });
+  
+  const originalQuestion = quiz.questions[questionIndex];
+  const duplicatedQuestion = {
+    ...originalQuestion,
+    id: uuidv4(),
+    questionText: originalQuestion.questionText + ' (kopie)',
+  };
+  
+  quiz.questions.splice(questionIndex + 1, 0, duplicatedQuestion);
+  saveQuiz(quiz);
+  res.json(duplicatedQuestion);
+});
+
 // Delete quiz
 router.delete('/:id', (req, res) => {
   deleteQuiz(req.params.id);

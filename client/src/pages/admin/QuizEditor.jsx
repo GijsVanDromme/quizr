@@ -2,16 +2,31 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Save, Image, Clock, CheckCircle,
-  GripVertical, FileText, Trophy, Upload, X, Type as TypeIcon, ListChecks
+  GripVertical, FileText, Trophy, Upload, X, Type as TypeIcon, ListChecks, Copy
 } from 'lucide-react';
 
-function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver }) {
+function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver, onDuplicate }) {
   const [expanded, setExpanded] = useState(true);
   const [uploading, setUploading] = useState(false);
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
   const update = (field, value) => {
     onChange({ ...question, [field]: value });
+  };
+
+  const handleDuplicate = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/quizzes/${question.quizId}/questions/${question.id}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        const duplicatedQuestion = await response.json();
+        onDuplicate(duplicatedQuestion);
+      }
+    } catch (error) {
+      console.error('Failed to duplicate question:', error);
+    }
   };
 
   const updateOption = (optIndex, value) => {
@@ -91,8 +106,15 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
           {question.questionText || 'Nieuwe vraag'}
         </span>
         <span className="text-xs px-2 py-1 bg-white/10 rounded-full">
-          {typeLabels[question.type] || question.type}
+          {typeDefs[question.type]?.label || question.type}
         </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleDuplicate(); }}
+          className="p-2 text-gray-500 hover:text-primary-400 transition-colors"
+          title="Kopieer vraag"
+        >
+          <Copy className="w-4 h-4" />
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="p-2 text-gray-500 hover:text-quiz-red transition-colors"
@@ -359,6 +381,11 @@ export default function QuizEditor() {
     setDragOverIndex(null);
   };
 
+  const handleDuplicate = async (duplicatedQuestion) => {
+    // Refresh the quiz to get the updated questions list
+    await fetchQuiz();
+  };
+
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900 p-6">
@@ -410,9 +437,10 @@ export default function QuizEditor() {
           {quiz.questions.map((q, i) => (
             <QuestionForm
               key={q.id || i}
-              question={q}
+              question={{ ...q, quizId: quiz.id }}
               onChange={(updated) => updateQuestion(i, updated)}
               onDelete={() => deleteQuestion(i)}
+              onDuplicate={handleDuplicate}
               index={i}
               onDragStart={handleDragStart(i)}
               onDragOver={handleDragOver(i)}
