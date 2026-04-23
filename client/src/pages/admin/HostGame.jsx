@@ -102,6 +102,7 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
   const optionShapes = ['△', '◇', '○', '□'];
+  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   return (
     <>
@@ -154,10 +155,10 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
         {question.imageUrl && (
           <div className={`relative ${question.type !== 'info_slide' ? 'group' : ''}`}>
             <img
-              src={question.imageUrl}
+              src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
               alt="Question"
               className={`max-h-[30rem] rounded-2xl mb-8 ${question.type === 'info_slide' ? '' : 'shadow-2xl'} object-contain ${question.type !== 'info_slide' ? 'cursor-pointer' : ''}`}
-              onClick={() => question.type !== 'info_slide' && setLightboxImage(question.imageUrl)}
+              onClick={() => question.type !== 'info_slide' && setLightboxImage(question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl)}
             />
             {question.type !== 'info_slide' && (
               <button

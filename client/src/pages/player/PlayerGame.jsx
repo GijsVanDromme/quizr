@@ -24,6 +24,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
   const [freeAnswers, setFreeAnswers] = useState(['', '', '']);
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState(null);
+  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   const optionColors = [
     'bg-quiz-red hover:bg-red-600 active:bg-red-700',
@@ -168,7 +169,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
         </h2>
         {question.imageUrl && (
           <img
-            src={question.imageUrl}
+            src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
             alt="Question"
             className="mt-3 w-full max-h-48 rounded-xl object-contain"
           />
