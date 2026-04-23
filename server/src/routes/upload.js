@@ -21,9 +21,19 @@ const upload = multer({
 const router = Router();
 
 router.post('/', upload.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (!req.file) {
+    console.error('❌ No file in request');
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  if (!supabase) {
+    console.error('❌ Supabase client not initialized');
+    return res.status(500).json({ error: 'Storage not configured' });
+  }
 
   try {
+    console.log('📤 Uploading file:', req.file.originalname, `(${req.file.size} bytes)`);
+    
     // Generate unique filename
     const ext = path.extname(req.file.originalname);
     const filename = `${uuidv4()}${ext}`;
@@ -38,8 +48,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       });
 
     if (error) {
-      console.error('Supabase upload error:', error);
-      return res.status(500).json({ error: 'Upload failed' });
+      console.error('❌ Supabase upload error:', error);
+      return res.status(500).json({ error: error.message || 'Upload failed' });
     }
 
     // Get public URL
@@ -47,10 +57,11 @@ router.post('/', upload.single('image'), async (req, res) => {
       .from('quiz-images')
       .getPublicUrl(filename);
 
+    console.log('✅ Upload successful:', publicUrl);
     res.json({ url: publicUrl });
   } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ error: 'Upload failed' });
+    console.error('❌ Upload error:', error);
+    res.status(500).json({ error: error.message || 'Upload failed' });
   }
 });
 

@@ -45,12 +45,15 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
       const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
       const data = await res.json();
       if (data.url) {
-        // Prefix with API base so images load from the backend domain in production
-        const absoluteUrl = data.url.startsWith('http') ? data.url : `${API_BASE}${data.url}`;
-        update('imageUrl', absoluteUrl);
+        // Supabase returns full URL, use it directly
+        update('imageUrl', data.url);
+      } else if (data.error) {
+        console.error('Upload error:', data.error);
+        alert('Upload failed: ' + data.error);
       }
     } catch (err) {
       console.error('Upload failed:', err);
+      alert('Upload failed. Check console for details.');
     }
     setUploading(false);
   };
