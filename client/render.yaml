@@ -1,10 +1,10 @@
 services:
   - type: web
     name: quiz-2026-client
-    env: static
+    env: node
     plan: free
     buildCommand: npm install && npm run build
-    publishDirectory: dist
+    startCommand: npx serve dist -l 3000
     envVars:
       - key: VITE_API_URL
-        value: https://quiz-2026-server.onrender.com
+        value: https://quizr-jc89.onrender.com
