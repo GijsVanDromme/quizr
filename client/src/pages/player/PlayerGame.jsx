@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
 import {
   Clock, CheckCircle, X, Trophy, Loader2,
-  Send, Zap, Flame, Star, Pause
+  Send, Zap, Flame, Star, Pause, Monitor, AlertTriangle, Award
 } from 'lucide-react';
 
 function WaitingScreen({ playerName }) {
@@ -14,7 +14,10 @@ function WaitingScreen({ playerName }) {
       </div>
       <h2 className="text-2xl font-bold mb-2">Hey {playerName}!</h2>
       <p className="text-gray-400 text-lg">Wachten tot de quiz begint...</p>
-      <p className="text-gray-600 text-sm mt-4">Kijk naar het grote scherm 📺</p>
+      <p className="text-gray-600 text-sm mt-4 flex items-center gap-2">
+        <Monitor className="w-4 h-4" />
+        Kijk naar het grote scherm
+      </p>
     </div>
   );
 }
@@ -58,7 +61,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
         <div className={`w-32 h-32 rounded-full flex items-center justify-center mb-6 ${statusColor} animate-bounce-in`}>
           {isPartial ? (
-            <div className="text-4xl">🤔</div>
+            <AlertTriangle className="w-20 h-20" />
           ) : result.isCorrect ? (
             <CheckCircle className="w-20 h-20" />
           ) : (
@@ -69,7 +72,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
         <h2 className={`text-3xl font-black mb-2 ${isPartial ? 'text-quiz-orange' : (result.isCorrect ? 'text-quiz-green' : 'text-quiz-red')}`}>
           {isPartial ? `Deels correct! ${result.correctCount}/${result.totalExpected}` :
            result.totalExpected > 1 ? `${result.correctCount}/${result.totalExpected} correct` :
-           (result.isCorrect ? 'Correct! 🎉' : 'Helaas! 😅')}
+           (result.isCorrect ? 'Correct!' : 'Helaas!')}
         </h2>
 
         {/* Show answer details for free type questions */}
@@ -272,11 +275,20 @@ function PlayerLeaderboardView({ leaderboard, playerName }) {
 function PlayerFinishedView({ leaderboard, playerName }) {
   const myRank = leaderboard.findIndex(p => p.name === playerName) + 1;
   const myData = leaderboard.find(p => p.name === playerName);
-  const emojis = ['🏆', '🥈', '🥉', '👏', '💪', '⭐', '🎮', '🎯'];
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
-      <div className="text-6xl mb-4">{emojis[Math.min(myRank - 1, emojis.length - 1)]}</div>
+      <div className="mb-4">
+        {myRank === 1 ? (
+          <Trophy className="w-16 h-16 text-quiz-yellow" />
+        ) : myRank === 2 ? (
+          <Award className="w-16 h-16 text-gray-300" />
+        ) : myRank === 3 ? (
+          <Award className="w-16 h-16 text-orange-400" />
+        ) : (
+          <Star className="w-16 h-16 text-primary-400" />
+        )}
+      </div>
       <h2 className="text-3xl font-black mb-2">Quiz Voltooid!</h2>
       <p className="text-gray-400 mb-6">Goed gespeeld, {playerName}!</p>
 

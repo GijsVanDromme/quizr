@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Save, Image, Clock, CheckCircle,
-  GripVertical, FileText, Trophy, Upload, X
+  GripVertical, FileText, Trophy, Upload, X, Type as TypeIcon, ListChecks
 } from 'lucide-react';
 
 function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver }) {
@@ -40,11 +40,11 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
     setUploading(false);
   };
 
-  const typeLabels = {
-    multiple_choice: '🔤 Meerkeuze',
-    free_type: '✏️ Open vraag',
-    info_slide: '📋 Info slide',
-    leaderboard_slide: '🏆 Tussenstand',
+  const typeDefs = {
+    multiple_choice: { label: 'Meerkeuze', Icon: ListChecks },
+    free_type: { label: 'Open vraag', Icon: TypeIcon },
+    info_slide: { label: 'Info slide', Icon: FileText },
+    leaderboard_slide: { label: 'Tussenstand', Icon: Trophy },
   };
 
   // Simplified view for leaderboard slides
@@ -106,17 +106,18 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
         <div className="px-4 pb-4 space-y-4 border-t border-white/5 pt-4">
           {/* Type selector */}
           <div className="flex gap-2 flex-wrap">
-            {Object.entries(typeLabels).map(([type, label]) => (
+            {Object.entries(typeDefs).map(([type, def]) => (
               <button
                 key={type}
                 onClick={() => update('type', type)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                   question.type === type
                     ? 'bg-primary-600 text-white'
                     : 'bg-white/5 text-gray-400 hover:bg-white/10'
                 }`}
               >
-                {label}
+                <def.Icon className="w-4 h-4" />
+                {def.label}
               </button>
             ))}
           </div>

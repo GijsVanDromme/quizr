@@ -66,7 +66,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
               key={p.id}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full text-sm font-medium animate-bounce-in"
             >
-              <span className="text-xl">{p.emoji || '😀'}</span>
+              <Users className="w-4 h-4 opacity-70" />
               <span>{p.name}</span>
             </div>
           ))}
