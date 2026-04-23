@@ -137,6 +137,13 @@
       ],
       "createdAt": "2026-04-22T15:09:30.623Z",
       "updatedAt": "2026-04-23T07:54:27.249Z"
+    },
+    {
+      "id": "8bb1cfcd-4209-4474-b7cc-c969028a9e38",
+      "title": "Nieuwe Quiz",
+      "description": "",
+      "questions": [],
+      "createdAt": "2026-04-23T09:27:55.765Z"
     }
   ],
   "admins": [

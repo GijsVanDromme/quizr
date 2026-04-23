@@ -8,6 +8,7 @@ import {
 function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver }) {
   const [expanded, setExpanded] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   const update = (field, value) => {
     onChange({ ...question, [field]: value });
@@ -26,9 +27,13 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
     const formData = new FormData();
     formData.append('image', file);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
       const data = await res.json();
-      if (data.url) update('imageUrl', data.url);
+      if (data.url) {
+        // Prefix with API base so images load from the backend domain in production
+        const absoluteUrl = data.url.startsWith('http') ? data.url : `${API_BASE}${data.url}`;
+        update('imageUrl', absoluteUrl);
+      }
     } catch (err) {
       console.error('Upload failed:', err);
     }
@@ -250,6 +255,7 @@ export default function QuizEditor() {
   const [quiz, setQuiz] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   // Drag and drop
   const [dragIndex, setDragIndex] = useState(null);
@@ -264,7 +270,7 @@ export default function QuizEditor() {
   }, [id, navigate]);
 
   const fetchQuiz = async () => {
-    const res = await fetch(`/api/quizzes/${id}`);
+    const res = await fetch(`${API_BASE}/api/quizzes/${id}`);
     if (!res.ok) return navigate('/admin');
     const data = await res.json();
     setQuiz(data);
@@ -272,7 +278,7 @@ export default function QuizEditor() {
 
   const saveQuiz = async () => {
     setSaving(true);
-    await fetch(`/api/quizzes/${id}`, {
+    await fetch(`${API_BASE}/api/quizzes/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(quiz),

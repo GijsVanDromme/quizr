@@ -5,6 +5,7 @@ import { Plus, Play, Edit, Trash2, ArrowLeft, FileText } from 'lucide-react';
 export default function AdminDashboard() {
   const [quizzes, setQuizzes] = useState([]);
   const navigate = useNavigate();
+  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     if (!sessionStorage.getItem('admin')) {
@@ -15,13 +16,13 @@ export default function AdminDashboard() {
   }, [navigate]);
 
   const fetchQuizzes = async () => {
-    const res = await fetch('/api/quizzes');
+    const res = await fetch(`${API_BASE}/api/quizzes`);
     const data = await res.json();
     setQuizzes(data);
   };
 
   const createQuiz = async () => {
-    const res = await fetch('/api/quizzes', {
+    const res = await fetch(`${API_BASE}/api/quizzes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Nieuwe Quiz', questions: [] }),
@@ -32,7 +33,7 @@ export default function AdminDashboard() {
 
   const deleteQuiz = async (id) => {
     if (!confirm('Weet je zeker dat je deze quiz wilt verwijderen?')) return;
-    await fetch(`/api/quizzes/${id}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/api/quizzes/${id}`, { method: 'DELETE' });
     fetchQuizzes();
   };
 
