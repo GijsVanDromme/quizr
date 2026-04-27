@@ -5,3 +5,6 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npx serve dist -l 3000
+    envVars:
+      - key: VITE_API_URL
+        sync: false
