@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Shield, ArrowLeft, Lock } from 'lucide-react';
+import { Shield, ArrowLeft, Lock, Eye, EyeOff } from 'lucide-react';
 
 const ADMIN_PASSWORD = 'meteor2026';
 
 export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = (e) => {
@@ -34,14 +35,23 @@ export default function AdminLogin() {
             <Lock className="w-4 h-4 inline mr-1" />
             Wachtwoord
           </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full text-center text-2xl font-bold py-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
-            placeholder="••••••"
-            autoFocus
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full text-center text-2xl font-bold py-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-primary-500 transition-colors pr-12"
+              placeholder="••••••"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
+            </button>
+          </div>
           {error && (
             <div className="mt-3 text-quiz-red text-sm text-center">{error}</div>
           )}
