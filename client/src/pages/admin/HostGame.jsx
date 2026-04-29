@@ -105,6 +105,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
 }
 
 function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause }) {
+  // (info slide & question screens both receive onPrevious)
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
   const optionShapes = ['△', '◇', '○', '□'];
@@ -157,7 +158,7 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
                 <img
                   src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
                   alt="Info slide"
-                  className="max-h-[40rem] rounded-2xl shadow-2xl object-contain"
+                  className="max-h-[40rem] rounded-2xl object-contain"
                 />
               </div>
             )}
@@ -166,8 +167,16 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
             </h2>
           </div>
 
-          {/* Footer - Next button */}
-          <div className="flex justify-center pb-6">
+          {/* Footer - Previous + Next */}
+          <div className="flex justify-center gap-3 pb-6">
+            <button
+              onClick={onPrevious}
+              className="px-6 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-lg font-bold transition-colors flex items-center gap-2"
+              title="Vorige"
+            >
+              <SkipBack className="w-5 h-5" />
+              Vorige
+            </button>
             <button
               onClick={onShowResults}
               className="px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl text-xl font-bold transition-colors flex items-center gap-3"
@@ -397,7 +406,7 @@ function ResultsScreen({ results, onShowLeaderboard }) {
   );
 }
 
-function LeaderboardScreen({ leaderboard, onNext, isLast }) {
+function LeaderboardScreen({ leaderboard, onNext, onPrevious, isLast }) {
   const medals = ['🥇', '🥈', '🥉'];
 
   return (
@@ -429,13 +438,25 @@ function LeaderboardScreen({ leaderboard, onNext, isLast }) {
         ))}
       </div>
 
-      <button
-        onClick={onNext}
-        className="px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl text-xl font-bold transition-colors flex items-center gap-3"
-      >
-        <SkipForward className="w-6 h-6" />
-        {isLast ? 'Resultaten' : 'Volgende vraag'}
-      </button>
+      <div className="flex justify-center gap-3">
+        {onPrevious && (
+          <button
+            onClick={onPrevious}
+            className="px-6 py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-lg font-bold transition-colors flex items-center gap-2"
+            title="Vorige"
+          >
+            <SkipBack className="w-5 h-5" />
+            Vorige
+          </button>
+        )}
+        <button
+          onClick={onNext}
+          className="px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl text-xl font-bold transition-colors flex items-center gap-3"
+        >
+          <SkipForward className="w-6 h-6" />
+          {isLast ? 'Resultaten' : 'Volgende vraag'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -717,6 +738,7 @@ export default function HostGame() {
       <LeaderboardScreen
         leaderboard={leaderboard}
         onNext={nextQuestion}
+        onPrevious={previousQuestion}
         isLast={currentQuestionNum >= totalQuestions}
       />
     );
