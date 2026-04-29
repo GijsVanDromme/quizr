@@ -54,8 +54,8 @@ function sortQuestionsForPlay(questions) {
 
 export class GameSession {
   constructor(quiz, hostSocketId) {
-    const sortedQuestions = sortQuestionsForPlay(quiz.questions || []);
-    this.quiz = { ...quiz, questions: sortedQuestions };
+    // Trust the saved question order (drag-and-drop is source of truth in editor)
+    this.quiz = { ...quiz, questions: quiz.questions || [] };
     this.hostSocketId = hostSocketId;
     this.pin = Math.floor(100000 + Math.random() * 900000).toString();
     this.players = new Map();
