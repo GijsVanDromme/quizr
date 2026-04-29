@@ -43,8 +43,8 @@ io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
   // HOST: Create game session
-  socket.on('host:create', ({ quizId }, callback) => {
-    const quiz = getQuiz(quizId);
+  socket.on('host:create', async ({ quizId }, callback) => {
+    const quiz = await getQuiz(quizId);
     if (!quiz) return callback({ error: 'Quiz not found' });
 
     const session = gameManager.createSession(quiz, socket.id);

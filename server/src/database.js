@@ -1,56 +1,91 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { supabase } from './supabase.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, '..', 'data', 'db.json');
+// Map DB row (snake_case) to API shape (camelCase)
+function fromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    questions: row.questions || [],
+    roundTitles: row.round_titles || {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
-function readDB() {
-  try {
-    const data = fs.readFileSync(DB_PATH, 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    return { quizzes: [] };
+// Map API quiz (camelCase) to DB row (snake_case)
+function toRow(quiz) {
+  return {
+    id: quiz.id,
+    title: quiz.title ?? 'Untitled Quiz',
+    description: quiz.description ?? '',
+    questions: quiz.questions ?? [],
+    round_titles: quiz.roundTitles ?? {},
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export async function getQuizzes() {
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select('id, title, description, questions, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] getQuizzes error:', error);
+    return [];
   }
-}
 
-function writeDB(data) {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
-
-export function getQuizzes() {
-  const db = readDB();
-  return db.quizzes.map(q => ({
-    id: q.id,
-    title: q.title,
-    description: q.description,
-    questionCount: q.questions?.length || 0,
-    createdAt: q.createdAt
+  return (data || []).map(row => ({
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    questionCount: Array.isArray(row.questions) ? row.questions.length : 0,
+    createdAt: row.created_at,
   }));
 }
 
-export function getQuiz(id) {
-  const db = readDB();
-  return db.quizzes.find(q => q.id === id) || null;
-}
+export async function getQuiz(id) {
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
-export function saveQuiz(quiz) {
-  const db = readDB();
-  const index = db.quizzes.findIndex(q => q.id === quiz.id);
-  if (index >= 0) {
-    db.quizzes[index] = quiz;
-  } else {
-    db.quizzes.push(quiz);
+  if (error) {
+    console.error('[DB] getQuiz error:', error);
+    return null;
   }
-  writeDB(db);
-  return quiz;
+
+  return fromRow(data);
 }
 
-export function deleteQuiz(id) {
-  const db = readDB();
-  db.quizzes = db.quizzes.filter(q => q.id !== id);
-  writeDB(db);
+export async function saveQuiz(quiz) {
+  const row = toRow(quiz);
+
+  const { data, error } = await supabase
+    .from('quizzes')
+    .upsert(row, { onConflict: 'id' })
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('[DB] saveQuiz error:', error);
+    throw error;
+  }
+
+  return fromRow(data);
+}
+
+export async function deleteQuiz(id) {
+  const { error } = await supabase
+    .from('quizzes')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[DB] deleteQuiz error:', error);
+    throw error;
+  }
 }
