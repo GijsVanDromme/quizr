@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Save, Image, Clock, CheckCircle,
@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Maximize2, Minimize2
 } from 'lucide-react';
 
-function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver, onDuplicate, showRoundHeader, expanded, onToggleExpand }) {
+function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver, onDuplicate, showRoundHeader, expanded, onToggleExpand, displayIndex }) {
   const [uploading, setUploading] = useState(false);
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -104,10 +104,12 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
         onClick={onToggleExpand}
       >
         <GripVertical className="w-5 h-5 text-gray-500 cursor-grab flex-shrink-0" onClick={e => e.stopPropagation()} />
-        <span className="text-sm font-medium text-gray-400">#{index + 1}</span>
+        {question.type !== 'info_slide' && (
+          <span className="text-sm font-medium text-gray-400">#{displayIndex ?? (index + 1)}</span>
+        )}
         <input
-          value={question.questionText || ''}
-          onChange={(e) => update('questionText', e.target.value)}
+          value={(question.displayTitle ?? question.questionText) || ''}
+          onChange={(e) => update('displayTitle', e.target.value)}
           onClick={(e) => e.stopPropagation()}
           className="flex-1 bg-transparent border-none outline-none font-medium text-gray-300 placeholder-gray-500 truncate"
           placeholder="Vraag titel..."
@@ -485,10 +487,29 @@ export default function QuizEditor() {
 
   // Create new Tussenslides section if it doesn't exist
   const createTussenslidesSection = () => {
-    const hasTussenslides = quiz.questions.some(q => (q.roundNumber ?? 1) === 0);
-    if (!hasTussenslides) {
-      addIntermediateSlide();
-    }
+    // Find all existing afterRound values from tussenslides
+    const existingAfterRounds = (quiz?.questions || [])
+      .filter(q => q.type === 'info_slide')
+      .map(q => q.afterRound ?? 0);
+    
+    // Find next available afterRound (use max existing + 1, or 0 if none)
+    const maxAfterRound = existingAfterRounds.length > 0 ? Math.max(...existingAfterRounds) : -1;
+    const newAfterRound = maxAfterRound + 1;
+    
+    const newQ = {
+      id: `temp-${Date.now()}`,
+      questionText: '',
+      type: 'info_slide',
+      imageUrl: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      correctAnswers: [],
+      inputFields: 1,
+      timeLimit: 20,
+      roundNumber: 0,
+      afterRound: newAfterRound,
+    };
+    setQuiz({ ...quiz, questions: [...quiz.questions, newQ] });
   };
 
   // Create new Tussenstand marker (multiple allowed)
@@ -498,7 +519,24 @@ export default function QuizEditor() {
       alert('Voeg eerst een ronde toe voordat je een tussenstand kunt plaatsen.');
       return;
     }
-    addLeaderboardSlide();
+    
+    // Place after the last round by default
+    const maxRound = Math.max(...roundNumbers);
+    
+    const newQ = {
+      id: `temp-${Date.now()}`,
+      questionText: '',
+      type: 'leaderboard_slide',
+      imageUrl: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      correctAnswers: [],
+      inputFields: 1,
+      timeLimit: 20,
+      roundNumber: -1,
+      afterRound: maxRound,
+    };
+    setQuiz({ ...quiz, questions: [...quiz.questions, newQ] });
   };
 
   const toggleAllQuestions = () => {
@@ -647,12 +685,26 @@ export default function QuizEditor() {
   // questionsByRound only for real questions (not special slides)
   const questionsByRound = quiz?.questions ? quiz.questions.reduce((acc, q, index) => {
     if (q.type === 'info_slide' || q.type === 'leaderboard_slide') return acc;
-    const round = q.roundNumber ?? 1;
+    // Use roundNumber if available, otherwise default to 1
+    const round = (q.roundNumber !== undefined && q.roundNumber !== null) ? q.roundNumber : 1;
     if (!acc[round]) acc[round] = [];
     acc[round].push({ question: q, originalIndex: index });
     return acc;
   }, {}) : {};
   const regularRounds = Object.keys(questionsByRound).filter(r => parseInt(r) > 0).sort((a, b) => parseInt(a) - parseInt(b));
+
+  // Map of originalIndex -> sequential display number (counts only real questions)
+  const displayIndexMap = useMemo(() => {
+    const map = {};
+    let count = 0;
+    (quiz?.questions || []).forEach((q, i) => {
+      if (q.type === 'multiple_choice' || q.type === 'free_type') {
+        count += 1;
+        map[i] = count;
+      }
+    });
+    return map;
+  }, [quiz?.questions]);
 
   // Build ordered list of all sections for rendering
   const buildOrderedSections = () => {
@@ -898,7 +950,16 @@ export default function QuizEditor() {
                       >
                         <GripVertical className="w-5 h-5 text-gray-500" />
                         <Hash className="w-5 h-5 text-primary-400" />
-                        <span className="font-bold text-lg text-primary-300">Ronde {section.roundNumber}</span>
+                        <input
+                          value={quiz.roundTitles?.[section.roundNumber] ?? ''}
+                          onChange={(e) => setQuiz({
+                            ...quiz,
+                            roundTitles: { ...(quiz.roundTitles || {}), [section.roundNumber]: e.target.value }
+                          })}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-bold text-lg text-primary-300 bg-transparent border-none outline-none placeholder-primary-400/60"
+                          placeholder={`Ronde ${section.roundNumber}`}
+                        />
                         <span className="text-sm text-gray-400">
                           ({section.questions.length} {section.questions.length === 1 ? 'vraag' : 'vragen'})
                         </span>
@@ -943,6 +1004,7 @@ export default function QuizEditor() {
                           isDragOver={dragOverIndex === i}
                           expanded={expandedQuestions[i] === true}
                           onToggleExpand={() => setExpandedQuestions(prev => ({ ...prev, [i]: !prev[i] }))}
+                          displayIndex={displayIndexMap[i]}
                         />
                       ))}
                     </div>
@@ -1025,6 +1087,7 @@ export default function QuizEditor() {
                           isDragOver={dragOverIndex === i}
                           expanded={expandedQuestions[i] === true}
                           onToggleExpand={() => setExpandedQuestions(prev => ({ ...prev, [i]: !prev[i] }))}
+                          displayIndex={displayIndexMap[i]}
                         />
                       ))}
                     </div>

@@ -23,6 +23,7 @@ router.post('/', (req, res) => {
     title: req.body.title || 'Untitled Quiz',
     description: req.body.description || '',
     questions: req.body.questions || [],
+    roundTitles: req.body.roundTitles || {},
     createdAt: new Date().toISOString(),
   };
   saveQuiz(quiz);
@@ -39,6 +40,7 @@ router.put('/:id', (req, res) => {
     title: req.body.title ?? existing.title,
     description: req.body.description ?? existing.description,
     questions: req.body.questions ?? existing.questions,
+    roundTitles: (req.body.roundTitles ?? existing.roundTitles) || {},
   };
   saveQuiz(updated);
   res.json(updated);

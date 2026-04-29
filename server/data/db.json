@@ -22,7 +22,9 @@
           ],
           "inputFields": 2,
           "timeLimit": 20,
-          "order": 0
+          "order": 0,
+          "quizId": "b117cb77-2b8f-4fdf-b850-fdaf52ea84e9",
+          "displayTitle": "Welke Collega's zien we hier? (2) Test"
         },
         {
           "id": "temp-1776870937972",
@@ -507,7 +509,10 @@
         }
       ],
       "createdAt": "2026-04-22T15:09:30.623Z",
-      "updatedAt": "2026-04-23T07:54:27.249Z"
+      "updatedAt": "2026-04-23T07:54:27.249Z",
+      "roundTitles": {
+        "1": "Fotoronde"
+      }
     }
   ],
   "admins": [
