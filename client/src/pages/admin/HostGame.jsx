@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
 import { QRCodeSVG } from 'qrcode.react';
 import {
-  Users, Play, SkipForward, Trophy, BarChart3,
+  Users, Play, SkipForward, SkipBack, Trophy, BarChart3,
   CheckCircle, X, Clock, Wifi, ArrowLeft, Eye, FileText, ZoomIn,
   Volume2, VolumeX, Pause, Play as PlayIcon
 } from 'lucide-react';
@@ -70,7 +70,9 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
               key={p.id}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full text-sm font-medium animate-bounce-in"
             >
-              <Users className="w-4 h-4 opacity-70" />
+              {p.emoji?.startsWith('/team-icons/')
+                ? <img src={p.emoji} alt="" className="w-6 h-6 object-contain" />
+                : <span className="text-lg">{p.emoji || '😀'}</span>}
               <span>{p.name}</span>
             </div>
           ))}
@@ -102,7 +104,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
   );
 }
 
-function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause }) {
+function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause }) {
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
   const optionShapes = ['△', '◇', '○', '□'];
@@ -122,6 +124,63 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
   ];
   const API_BASE = import.meta.env.VITE_API_URL || '';
 
+  // Info slide - simplified view without timer, answers, etc.
+  if (question.type === 'info_slide') {
+    return (
+      <>
+        <div className="min-h-screen flex flex-col p-6 md:p-10 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900 relative">
+          {/* Header - simplified */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <span className="text-gray-400 font-medium">
+                Slide {question.questionNumber} / {question.totalQuestions}
+              </span>
+              <span className="px-3 py-1 bg-purple-600/30 text-purple-300 rounded-full text-sm font-bold">
+                Tussenslide
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onToggleMusic}
+                className={`p-2 rounded-full transition-colors ${musicEnabled ? 'bg-primary-600/30 text-primary-400' : 'bg-white/10 text-gray-500 hover:text-gray-300'}`}
+                title={musicEnabled ? 'Muziek uit' : 'Muziek aan'}
+              >
+                {musicEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 flex flex-col items-center justify-center">
+            {question.imageUrl && (
+              <div className="relative mb-8">
+                <img
+                  src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
+                  alt="Info slide"
+                  className="max-h-[40rem] rounded-2xl shadow-2xl object-contain"
+                />
+              </div>
+            )}
+            <h2 className="text-3xl md:text-5xl font-bold text-center mb-8 max-w-4xl leading-tight">
+              {question.questionText}
+            </h2>
+          </div>
+
+          {/* Footer - Next button */}
+          <div className="flex justify-center pb-6">
+            <button
+              onClick={onShowResults}
+              className="px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl text-xl font-bold transition-colors flex items-center gap-3"
+            >
+              <SkipForward className="w-6 h-6" />
+              Volgende
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {lightboxImage && <ImageLightbox imageUrl={lightboxImage} onClose={() => setLightboxImage(null)} />}
@@ -132,13 +191,6 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
           <span className="text-gray-400 font-medium">
             Slide {question.questionNumber} / {question.totalQuestions}
           </span>
-          <button
-            onClick={onTogglePause}
-            className={`p-2 rounded-full transition-colors ${isPaused ? 'bg-quiz-yellow text-black' : 'bg-white/10 text-gray-500 hover:text-gray-300'}`}
-            title={isPaused ? 'Hervatten' : 'Pauzeren'}
-          >
-            {isPaused ? <PlayIcon className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-          </button>
         </div>
         {isPaused && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-quiz-yellow/90 text-black px-8 py-4 rounded-2xl font-bold text-2xl animate-pulse z-10">
@@ -146,6 +198,18 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
           </div>
         )}
         <div className="flex items-center gap-4">
+          <button
+            onClick={onTogglePause}
+            className={`p-2 rounded-full transition-colors ${isPaused ? 'bg-quiz-yellow text-black' : 'bg-white/10 text-gray-500 hover:text-gray-300'}`}
+            title={isPaused ? 'Hervatten' : 'Pauzeren'}
+          >
+            {isPaused ? <PlayIcon className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+          </button>
+          {question.roundNumber && question.roundNumber > 0 && (
+            <span className="px-3 py-1 bg-primary-600/30 text-primary-300 rounded-full text-sm font-bold">
+              Ronde {question.roundNumber}
+            </span>
+          )}
           <div className="flex items-center gap-2 text-gray-400">
             <Users className="w-4 h-4" />
             <span>{answerCount} / {totalPlayers}</span>
@@ -166,16 +230,12 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
 
       {/* Question */}
       <div className="flex-1 flex flex-col items-center justify-center">
-        <h2 className="text-3xl md:text-5xl font-bold text-center mb-8 max-w-4xl leading-tight">
-          {question.questionText}
-        </h2>
-
         {question.imageUrl && (
-          <div className={`relative ${question.type !== 'info_slide' ? 'group' : ''}`}>
+          <div className={`relative mb-8 ${question.type !== 'info_slide' ? 'group' : ''}`}>
             <img
               src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
               alt="Question"
-              className={`max-h-[30rem] rounded-2xl mb-8 ${question.type === 'info_slide' ? '' : 'shadow-2xl'} object-contain ${question.type !== 'info_slide' ? 'cursor-pointer' : ''}`}
+              className={`max-h-[30rem] rounded-2xl ${question.type === 'info_slide' ? '' : 'shadow-2xl'} object-contain ${question.type !== 'info_slide' ? 'cursor-pointer' : ''}`}
               onClick={() => question.type !== 'info_slide' && setLightboxImage(question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl)}
             />
             {question.type !== 'info_slide' && (
@@ -189,6 +249,10 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
             )}
           </div>
         )}
+
+        <h2 className="text-3xl md:text-5xl font-bold text-center mb-8 max-w-4xl leading-tight">
+          {question.questionText}
+        </h2>
       </div>
 
       {/* Options */}
@@ -214,13 +278,31 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, ti
         </div>
       )}
 
-      {/* Show Results Button */}
-      <div className="mt-6 flex justify-center">
+      {/* Navigation Buttons */}
+      <div className="mt-6 flex justify-center gap-3">
         <button
-          onClick={onShowResults}
-          className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-medium transition-colors"
+          onClick={onPrevious}
+          className="px-5 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-medium transition-colors flex items-center gap-2"
+          title="Vorige vraag"
         >
-          {question.type === 'info_slide' || question.type === 'leaderboard_slide' ? 'Volgende' : 'Toon resultaten'}
+          <SkipBack className="w-4 h-4" />
+          Vorige
+        </button>
+        {question.type !== 'info_slide' && question.type !== 'leaderboard_slide' && (
+          <button
+            onClick={onShowResults}
+            className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-medium transition-colors"
+          >
+            Toon resultaten
+          </button>
+        )}
+        <button
+          onClick={onSkipNext}
+          className="px-5 py-3 bg-primary-600/30 hover:bg-primary-600/50 border border-primary-500/30 rounded-xl font-medium transition-colors flex items-center gap-2"
+          title="Direct naar volgende vraag (resultaten overslaan)"
+        >
+          Volgende
+          <SkipForward className="w-4 h-4" />
         </button>
       </div>
       </div>
@@ -338,7 +420,9 @@ function LeaderboardScreen({ leaderboard, onNext, isLast }) {
             <span className="text-3xl w-12 text-center">
               {medals[i] || `#${i + 1}`}
             </span>
-            <span className="text-2xl">{player.emoji || '😀'}</span>
+            {player.emoji?.startsWith('/team-icons/')
+              ? <img src={player.emoji} alt="" className="w-10 h-10 object-contain" />
+              : <span className="text-2xl">{player.emoji || '😀'}</span>}
             <span className="flex-1 font-bold text-lg">{player.name}</span>
             <span className="text-xl font-black">{player.score.toLocaleString()}</span>
           </div>
@@ -379,7 +463,9 @@ function FinishedScreen({ leaderboard }) {
             <span className="text-3xl w-12 text-center">
               {medals[i] || `#${i + 1}`}
             </span>
-            <span className="text-2xl">{player.emoji || '😀'}</span>
+            {player.emoji?.startsWith('/team-icons/')
+              ? <img src={player.emoji} alt="" className="w-10 h-10 object-contain" />
+              : <span className="text-2xl">{player.emoji || '😀'}</span>}
             <div className="flex-1">
               <span className="font-bold text-lg">{player.name}</span>
               <div className="text-sm text-gray-400">
@@ -527,6 +613,21 @@ export default function HostGame() {
     });
   }, [socket]);
 
+  const previousQuestion = useCallback(() => {
+    socket.emit('host:previous', (response) => {
+      if (response?.error) return;
+      if (response.state === 'question') {
+        setCurrentQuestion(response.question);
+        setCurrentQuestionNum(response.question.questionNumber);
+        setAnswerCount(0);
+        setGameState('question');
+      } else if (response.state === 'leaderboard') {
+        setLeaderboard(response.leaderboard);
+        setGameState('leaderboard');
+      }
+    });
+  }, [socket]);
+
   const nextQuestion = useCallback(() => {
     socket.emit('host:next', (response) => {
       if (response.state === 'question') {
@@ -596,6 +697,8 @@ export default function HostGame() {
         answerCount={answerCount}
         totalPlayers={players.length}
         onShowResults={showResults}
+        onPrevious={previousQuestion}
+        onSkipNext={nextQuestion}
         timeLeft={timeLeft}
         musicEnabled={musicEnabled}
         onToggleMusic={() => setMusicEnabled(!musicEnabled)}

@@ -1,6 +1,61 @@
+// Sort questions for quiz playback:
+// - Info_slides (roundNumber=0) with afterRound=0 come first (before any round)
+// - For each round: questions, then info_slides with afterRound=roundNum, then leaderboards with afterRound=roundNum
+function sortQuestionsForPlay(questions) {
+  if (!questions || questions.length === 0) return [];
+  const withIdx = questions.map((q, idx) => ({ ...q, _origIdx: idx }));
+  
+  // Filter by type (not roundNumber) — robust even when roundNumber is missing
+  const infoSlides = withIdx
+    .filter(q => q.type === 'info_slide')
+    .sort((a, b) => a._origIdx - b._origIdx);
+  
+  const leaderboards = withIdx
+    .filter(q => q.type === 'leaderboard_slide')
+    .sort((a, b) => a._origIdx - b._origIdx);
+  
+  const regulars = withIdx
+    .filter(q => q.type !== 'info_slide' && q.type !== 'leaderboard_slide')
+    .sort((a, b) => {
+      const aRound = a.roundNumber ?? 1;
+      const bRound = b.roundNumber ?? 1;
+      if (aRound !== bRound) return aRound - bRound;
+      return a._origIdx - b._origIdx;
+    });
+  
+  const byRound = {};
+  regulars.forEach(q => {
+    const r = q.roundNumber ?? 1;
+    if (!byRound[r]) byRound[r] = [];
+    byRound[r].push(q);
+  });
+  
+  const roundNumbers = Object.keys(byRound).map(r => parseInt(r)).sort((a, b) => a - b);
+  const lastRound = roundNumbers.length > 0 ? roundNumbers[roundNumbers.length - 1] : 0;
+  
+  const result = [];
+  const slidesAtStart = infoSlides.filter(s => (s.afterRound ?? 0) === 0);
+  result.push(...slidesAtStart);
+  
+  for (const roundNum of roundNumbers) {
+    result.push(...byRound[roundNum]);
+    const infoHere = infoSlides.filter(s => (s.afterRound ?? 0) === roundNum);
+    result.push(...infoHere);
+    const lbsHere = leaderboards.filter(lb => (lb.afterRound ?? lastRound) === roundNum);
+    result.push(...lbsHere);
+  }
+  
+  const placedIds = new Set(result.map(q => q.id));
+  const unplaced = [...infoSlides, ...leaderboards].filter(q => !placedIds.has(q.id));
+  result.push(...unplaced);
+  
+  return result.map(({ _origIdx, ...q }) => q);
+}
+
 export class GameSession {
   constructor(quiz, hostSocketId) {
-    this.quiz = quiz;
+    const sortedQuestions = sortQuestionsForPlay(quiz.questions || []);
+    this.quiz = { ...quiz, questions: sortedQuestions };
     this.hostSocketId = hostSocketId;
     this.pin = Math.floor(100000 + Math.random() * 900000).toString();
     this.players = new Map();
@@ -81,6 +136,7 @@ export class GameSession {
       type: q.type,
       imageUrl: q.imageUrl,
       timeLimit: q.timeLimit || 20,
+      roundNumber: q.roundNumber,
     };
 
     if (q.type === 'multiple_choice') {
@@ -90,6 +146,27 @@ export class GameSession {
     }
 
     return base;
+  }
+
+  previousQuestion() {
+    if (this.currentQuestionIndex <= 0) {
+      // Already at first question; just re-emit current
+      this.currentQuestionIndex = 0;
+    } else {
+      this.currentQuestionIndex--;
+    }
+    this.answerCount = 0;
+
+    const prevQ = this.quiz.questions[this.currentQuestionIndex];
+
+    if (prevQ.type === 'leaderboard_slide') {
+      this.state = 'leaderboard';
+      return { state: 'leaderboard', leaderboard: this.getLeaderboard() };
+    }
+
+    this.state = 'question';
+    this.questionStartTime = Date.now();
+    return { state: 'question', question: this.getCurrentQuestion() };
   }
 
   nextQuestion() {
@@ -102,13 +179,22 @@ export class GameSession {
     }
 
     const nextQ = this.quiz.questions[this.currentQuestionIndex];
-    
+
     // If next slide is a leaderboard slide, show leaderboard directly
     if (nextQ.type === 'leaderboard_slide') {
       this.state = 'leaderboard';
       return {
         state: 'leaderboard',
         leaderboard: this.getLeaderboard()
+      };
+    }
+
+    // If next slide is an info slide (tussenslide), show it without timer/answers
+    if (nextQ.type === 'info_slide') {
+      this.state = 'question'; // Use question state but it's an info slide
+      return {
+        state: 'question',
+        question: this.getCurrentQuestion()
       };
     }
 

@@ -4,6 +4,7 @@ import { useSocket } from '../../context/SocketContext';
 import { ArrowLeft, Gamepad2, User, Hash, Wifi, WifiOff, Smile, Download, X as XIcon } from 'lucide-react';
 
 const EMOJIS = ['😀', '😎', '🚀', '🔥', '⭐', '🎮', '🏆', '💪', '🎯', '🌟', '⚡', '🎪', '🎨', '🎭', '🎪', '🦄', '🐱', '🐶', '🦊', '🦁', '🐸', '🐼', '🦉', '🦋', '🌈', '☀️', '🌙', '⚽', '🏀', '🎾', '🎸', '🎹', '🎧', '📷', '💻', '🚗', '✈️', '🚀'];
+const TEAM_ICONS = ['/team-icons/1.png', '/team-icons/2.png', '/team-icons/3.png', '/team-icons/4.png', '/team-icons/5.png', '/team-icons/6.png', '/team-icons/7.png', '/team-icons/8.png'];
 
 function InstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -77,7 +78,7 @@ function InstallBanner() {
 export default function PlayerJoin() {
   const [pin, setPin] = useState('');
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState('😀');
+  const [emoji, setEmoji] = useState(TEAM_ICONS[0]);
   const [step, setStep] = useState('pin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -201,17 +202,17 @@ export default function PlayerJoin() {
 
             <label className="block text-sm text-gray-400 mb-2">
               <Smile className="w-4 h-4 inline mr-1" />
-              Kies je emoji
+              Kies je team icoon
             </label>
-            <div className="flex flex-wrap gap-2 justify-center mb-4 p-3 bg-white/5 rounded-xl">
-              {EMOJIS.slice(0, 20).map((e) => (
+            <div className="grid grid-cols-4 gap-2 mb-4 p-3 bg-white/5 rounded-xl">
+              {TEAM_ICONS.map((icon) => (
                 <button
-                  key={e}
+                  key={icon}
                   type="button"
-                  onClick={() => setEmoji(e)}
-                  className={`text-2xl p-2 rounded-lg transition-all ${emoji === e ? 'bg-primary-600 scale-110' : 'hover:bg-white/10'}`}
+                  onClick={() => setEmoji(icon)}
+                  className={`p-1 rounded-lg transition-all flex items-center justify-center ${emoji === icon ? 'bg-primary-600 ring-2 ring-primary-400 scale-105' : 'hover:bg-white/10'}`}
                 >
-                  {e}
+                  <img src={icon} alt="" className="w-12 h-12 object-contain" />
                 </button>
               ))}
             </div>
@@ -221,7 +222,9 @@ export default function PlayerJoin() {
               Je naam
             </label>
             <div className="flex items-center gap-2">
-              <span className="text-3xl">{emoji}</span>
+              {emoji?.startsWith('/team-icons/')
+                ? <img src={emoji} alt="" className="w-12 h-12 object-contain" />
+                : <span className="text-3xl">{emoji}</span>}
               <input
                 type="text"
                 value={name}

@@ -113,15 +113,17 @@ io.on('connection', (socket) => {
     if (result.state === 'question') {
       io.to(`game:${session.pin}`).emit('game:question', result.question);
       
-      // Auto-end question after time limit
-      const timeLimit = (result.question.timeLimit || 20) * 1000;
-      session.timer = setTimeout(() => {
-        if (session.state === 'question' && !session.paused) {
-          session.state = 'results';
-          const results = session.getQuestionResults();
-          io.to(`game:${session.pin}`).emit('game:question-results', results);
-        }
-      }, timeLimit + 1000);
+      // Info slides have no timer — host manually advances
+      if (result.question.type !== 'info_slide') {
+        const timeLimit = (result.question.timeLimit || 20) * 1000;
+        session.timer = setTimeout(() => {
+          if (session.state === 'question' && !session.paused) {
+            session.state = 'results';
+            const results = session.getQuestionResults();
+            io.to(`game:${session.pin}`).emit('game:question-results', results);
+          }
+        }, timeLimit + 1000);
+      }
     } else if (result.state === 'leaderboard') {
       io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard: result.leaderboard });
     } else if (result.state === 'finished') {
@@ -150,14 +152,17 @@ io.on('connection', (socket) => {
       console.log('[DEBUG] Question:', result.question?.questionText);
       io.to(`game:${session.pin}`).emit('game:question', result.question);
 
-      const timeLimit = (result.question.timeLimit || 20) * 1000;
-      session.timer = setTimeout(() => {
-        if (session.state === 'question' && !session.paused) {
-          session.state = 'results';
-          const results = session.getQuestionResults();
-          io.to(`game:${session.pin}`).emit('game:question-results', results);
-        }
-      }, timeLimit + 1000);
+      // Info slides have no timer — host manually advances
+      if (result.question.type !== 'info_slide') {
+        const timeLimit = (result.question.timeLimit || 20) * 1000;
+        session.timer = setTimeout(() => {
+          if (session.state === 'question' && !session.paused) {
+            session.state = 'results';
+            const results = session.getQuestionResults();
+            io.to(`game:${session.pin}`).emit('game:question-results', results);
+          }
+        }, timeLimit + 1000);
+      }
     } else if (result.state === 'leaderboard') {
       console.log('[DEBUG] Emitting game:leaderboard to room game:' + session.pin);
       io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard: result.leaderboard });
@@ -166,6 +171,35 @@ io.on('connection', (socket) => {
       io.to(`game:${session.pin}`).emit('game:finished', {
         leaderboard: result.leaderboard
       });
+    }
+
+    callback(result);
+  });
+
+  // HOST: Previous question
+  socket.on('host:previous', (callback) => {
+    const session = gameManager.getSessionBySocket(socket.id);
+    if (!session) return callback({ error: 'No active session' });
+
+    if (session.timer) clearTimeout(session.timer);
+
+    const result = session.previousQuestion();
+
+    if (result.state === 'question') {
+      io.to(`game:${session.pin}`).emit('game:question', result.question);
+
+      if (result.question.type !== 'info_slide') {
+        const timeLimit = (result.question.timeLimit || 20) * 1000;
+        session.timer = setTimeout(() => {
+          if (session.state === 'question' && !session.paused) {
+            session.state = 'results';
+            const results = session.getQuestionResults();
+            io.to(`game:${session.pin}`).emit('game:question-results', results);
+          }
+        }, timeLimit + 1000);
+      }
+    } else if (result.state === 'leaderboard') {
+      io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard: result.leaderboard });
     }
 
     callback(result);

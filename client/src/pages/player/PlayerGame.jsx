@@ -194,15 +194,57 @@ function QuestionView({ question, onAnswer, timeLeft }) {
     );
   }
 
+  // Info slide - simplified view without timer, answers
+  if (question.type === 'info_slide') {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900 overflow-hidden">
+        {/* Top bar - simplified */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 font-medium">
+              {question.questionNumber}/{question.totalQuestions}
+            </span>
+            <span className="px-2 py-0.5 bg-purple-600/30 text-purple-300 rounded-full text-xs font-bold">
+              Tussenslide
+            </span>
+          </div>
+        </div>
+
+        {/* Image + Question text */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
+          {question.imageUrl && (
+            <div className="relative mb-4 w-full max-w-md">
+              <img
+                src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
+                alt="Info slide"
+                className="w-full max-h-64 rounded-xl object-contain"
+              />
+            </div>
+          )}
+          <h2 className="text-xl font-bold text-center leading-snug">
+            {question.questionText}
+          </h2>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {lightboxImage && <ImageLightbox imageUrl={lightboxImage} onClose={() => setLightboxImage(null)} />}
       <div className="h-[100dvh] flex flex-col bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900 overflow-hidden">
         {/* Top bar */}
       <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">
-        <span className="text-xs text-gray-400 font-medium">
-          {question.questionNumber}/{question.totalQuestions}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-medium">
+            {question.questionNumber}/{question.totalQuestions}
+          </span>
+          {question.roundNumber && question.roundNumber > 0 && (
+            <span className="px-2 py-0.5 bg-primary-600/30 text-primary-300 rounded-full text-xs font-bold">
+              Ronde {question.roundNumber}
+            </span>
+          )}
+        </div>
         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-bold ${timeLeft <= 5 ? 'bg-quiz-red/20 text-quiz-red animate-pulse' : 'bg-white/10 text-white'}`}>
           <Clock className="w-3 h-3" />
           {timeLeft}s
@@ -217,13 +259,10 @@ function QuestionView({ question, onAnswer, timeLeft }) {
         />
       </div>
 
-      {/* Question text + image */}
+      {/* Image + Question text */}
       <div className="px-4 pt-3 pb-2 flex-shrink-0">
-        <h2 className="text-base font-bold leading-snug line-clamp-3">
-          {question.questionText}
-        </h2>
         {question.imageUrl && (
-          <div className="relative mt-2 group cursor-pointer" onClick={() => setLightboxImage(question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl)}>
+          <div className="relative mb-2 group cursor-pointer" onClick={() => setLightboxImage(question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl)}>
             <img
               src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
               alt="Question"
@@ -234,6 +273,9 @@ function QuestionView({ question, onAnswer, timeLeft }) {
             </div>
           </div>
         )}
+        <h2 className="text-base font-bold leading-snug line-clamp-3">
+          {question.questionText}
+        </h2>
       </div>
 
       {/* Multiple Choice – fills remaining space */}
@@ -429,7 +471,9 @@ function PlayerResultsView({ results, playerName }) {
                 ) : (
                   <X className="w-5 h-5 text-quiz-red flex-shrink-0" />
                 )}
-                <span className="text-xl">{a.emoji || '😀'}</span>
+                {a.emoji?.startsWith('/team-icons/')
+                  ? <img src={a.emoji} alt="" className="w-7 h-7 object-contain" />
+                  : <span className="text-xl">{a.emoji || '😀'}</span>}
                 <span className={`font-medium flex-1 truncate ${a.playerName === playerName ? 'text-primary-400 font-bold' : ''}`}>
                   {a.playerName}
                 </span>
@@ -497,7 +541,9 @@ function PlayerLeaderboardView({ leaderboard, playerName }) {
             <span className={`w-8 text-center font-bold ${i === 0 ? 'text-quiz-yellow' : 'text-gray-400'}`}>
               {i === 0 ? '🥇' : `#${i + 1}`}
             </span>
-            <span className="text-2xl">{p.emoji || '😀'}</span>
+            {p.emoji?.startsWith('/team-icons/')
+              ? <img src={p.emoji} alt="" className="w-9 h-9 object-contain" />
+              : <span className="text-2xl">{p.emoji || '😀'}</span>}
             <span className={`flex-1 font-medium ${i === 0 ? 'text-quiz-yellow font-bold' : ''}`}>{p.name}</span>
             <span className={`font-bold ${i === 0 ? 'text-quiz-yellow' : ''}`}>{p.score.toLocaleString()}</span>
           </div>
