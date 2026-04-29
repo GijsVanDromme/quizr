@@ -217,11 +217,11 @@ function QuestionView({ question, onAnswer, timeLeft }) {
               <img
                 src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
                 alt="Info slide"
-                className="w-full max-h-64 rounded-xl object-contain"
+                className={`w-full max-h-64 rounded-xl object-contain transition-all duration-1000 ease-in-out ${question.animated ? 'animate-pulse scale-105 brightness-110' : ''}`}
               />
             </div>
           )}
-          <h2 className="text-xl font-bold text-center leading-snug">
+          <h2 className={`text-xl font-bold text-center leading-snug ${question.animated ? 'animate-pulse' : ''}`}>
             {question.questionText}
           </h2>
         </div>

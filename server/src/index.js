@@ -100,7 +100,20 @@ io.on('connection', (socket) => {
         players: session.getPlayers()
       });
       callback(result);
+
+      // Broadcast updated taken icons to all players in lobby
+      const takenIcons = session.getPlayers().map(p => p.emoji);
+      io.to(`game:${pin}`).emit('game:taken-icons', takenIcons);
     }
+  });
+
+  // PLAYER: Get taken icons for a game
+  socket.on('player:get-taken-icons', (pin) => {
+    const session = gameManager.getSession(pin);
+    if (!session) return;
+
+    const takenIcons = session.getPlayers().map(p => p.emoji);
+    socket.emit('game:taken-icons', takenIcons);
   });
 
   // HOST: Start the game (first question)

@@ -158,11 +158,11 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
                 <img
                   src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
                   alt="Info slide"
-                  className="max-h-[40rem] rounded-2xl object-contain"
+                  className={`max-h-[40rem] rounded-2xl object-contain transition-all duration-1000 ease-in-out ${question.animated ? 'animate-pulse scale-105 brightness-110' : ''}`}
                 />
               </div>
             )}
-            <h2 className="text-3xl md:text-5xl font-bold text-center mb-8 max-w-4xl leading-tight">
+            <h2 className={`text-3xl md:text-5xl font-bold text-center mb-8 max-w-4xl leading-tight ${question.animated ? 'animate-pulse' : ''}`}>
               {question.questionText}
             </h2>
           </div>
@@ -409,10 +409,40 @@ function ResultsScreen({ results, onShowLeaderboard }) {
 function LeaderboardScreen({ leaderboard, onNext, onPrevious, isLast }) {
   const medals = ['🥇', '🥈', '🥉'];
 
+  // Podium: top 3 players
+  const top3 = leaderboard.slice(0, 3);
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
       <Trophy className="w-16 h-16 text-quiz-yellow mb-4" />
-      <h2 className="text-4xl font-black mb-8">Tussenstand</h2>
+      <h2 className="text-4xl font-black mb-6">Tussenstand</h2>
+
+      {/* Podium visualization */}
+      {top3.length > 0 && (
+        <div className="flex items-end justify-center gap-4 mb-6 w-full max-w-2xl">
+          {top3.map((player, idx) => {
+            const place = idx === 0 ? 1 : idx === 1 ? 2 : 3;
+            const heights = ['h-40', 'h-32', 'h-24'];
+            const colors = ['bg-quiz-yellow/20 border-quiz-yellow/40', 'bg-gray-300/20 border-gray-300/30', 'bg-orange-400/20 border-orange-400/30'];
+            const medals = ['🥇', '🥈', '🥉'];
+            const widths = ['w-28', 'w-24', 'w-24'];
+            const emojiSizes = ['text-4xl', 'text-3xl', 'text-3xl'];
+
+            return (
+              <div key={player.id} className="flex flex-col items-center">
+                {player.emoji?.startsWith('/team-icons/')
+                  ? <img src={player.emoji} alt="" className={`w-${idx === 0 ? 14 : 12} h-${idx === 0 ? 14 : 12} object-contain mb-2`} />
+                  : <span className={`${emojiSizes[idx]} mb-2`}>{player.emoji || '😀'}</span>}
+                <span className={idx === 0 ? 'text-quiz-yellow font-bold mb-2' : 'text-gray-300 font-bold mb-2'}>{player.name}</span>
+                <div className={`${widths[idx]} ${heights[idx]} ${colors[idx]} border-2 rounded-t-2xl flex flex-col items-center justify-center`}>
+                  <span className="text-2xl mb-1">{medals[idx]}</span>
+                  <span className="font-black text-lg">{player.score.toLocaleString()}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="w-full max-w-2xl space-y-3 mb-10">
         {leaderboard.map((player, i) => (
@@ -544,7 +574,10 @@ export default function HostGame() {
   useEffect(() => {
     if (!audioRef.current) return;
     if (musicEnabled) {
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch((err) => {
+        console.warn('[Audio] Play failed:', err.message);
+        // Browser blocked autoplay - user needs to interact first
+      });
     } else {
       audioRef.current.pause();
     }

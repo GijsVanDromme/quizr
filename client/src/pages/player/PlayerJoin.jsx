@@ -82,6 +82,7 @@ export default function PlayerJoin() {
   const [step, setStep] = useState('pin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [takenIcons, setTakenIcons] = useState([]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { socket, connected } = useSocket();
@@ -93,6 +94,26 @@ export default function PlayerJoin() {
       setStep('name');
     }
   }, [searchParams]);
+
+  // Listen for taken icons updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTakenIcons = (icons) => {
+      setTakenIcons(icons || []);
+    };
+
+    socket.on('game:taken-icons', handleTakenIcons);
+
+    // Request taken icons when PIN is entered
+    if (pin.length === 6) {
+      socket.emit('player:get-taken-icons', pin);
+    }
+
+    return () => {
+      socket.off('game:taken-icons', handleTakenIcons);
+    };
+  }, [socket, pin]);
 
   const handlePinSubmit = (e) => {
     e.preventDefault();
@@ -205,16 +226,22 @@ export default function PlayerJoin() {
               Kies je team icoon
             </label>
             <div className="grid grid-cols-4 gap-2 mb-4 p-3 bg-white/5 rounded-xl">
-              {TEAM_ICONS.map((icon) => (
-                <button
-                  key={icon}
-                  type="button"
-                  onClick={() => setEmoji(icon)}
-                  className={`p-1 rounded-lg transition-all flex items-center justify-center ${emoji === icon ? 'bg-primary-600 ring-2 ring-primary-400 scale-105' : 'hover:bg-white/10'}`}
-                >
-                  <img src={icon} alt="" className="w-12 h-12 object-contain" />
-                </button>
-              ))}
+              {TEAM_ICONS.map((icon) => {
+                const isTaken = takenIcons.includes(icon) && emoji !== icon;
+                return (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => !isTaken && setEmoji(icon)}
+                    disabled={isTaken}
+                    className={`p-1 rounded-lg transition-all flex items-center justify-center ${
+                      emoji === icon ? 'bg-primary-600 ring-2 ring-primary-400 scale-105' : 'hover:bg-white/10'
+                    } ${isTaken ? 'opacity-30 cursor-not-allowed' : ''}`}
+                  >
+                    <img src={icon} alt="" className="w-12 h-12 object-contain" />
+                  </button>
+                );
+              })}
             </div>
 
             <label className="block text-sm text-gray-400 mb-2">

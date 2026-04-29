@@ -1,14 +1,24 @@
 import { Link } from 'react-router-dom';
-import { Gamepad2, Shield, Zap, Users, Trophy } from 'lucide-react';
+import { Gamepad2, Shield, Zap, Users, Trophy, Wifi, WifiOff } from 'lucide-react';
+import { useSocket } from '../context/SocketContext';
 
 export default function Home() {
+  const { connected } = useSocket();
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
+      <div className="absolute top-6 right-6 flex items-center gap-2 text-sm">
+        {connected ? <Wifi className="w-4 h-4 text-quiz-green" /> : <WifiOff className="w-4 h-4 text-quiz-red" />}
+        <span className={connected ? 'text-quiz-green' : 'text-quiz-red'}>
+          {connected ? 'Verbonden' : 'Geen verbinding'}
+        </span>
+      </div>
+
       <div className="text-center mb-12">
         <h1 className="text-6xl md:text-8xl font-black mb-4 bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
-          Quiz 2026
+          Quizrr
         </h1>
-        <p className="text-xl text-gray-400">De ultieme quiz ervaring</p>
+        <p className="text-xl text-gray-400">Knowledge with an impact</p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">

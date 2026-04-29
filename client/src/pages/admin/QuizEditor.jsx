@@ -107,6 +107,13 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
         {question.type !== 'info_slide' && (
           <span className="text-sm font-medium text-gray-400">#{displayIndex ?? (index + 1)}</span>
         )}
+        {question.imageUrl && (
+          <img
+            src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
+            alt=""
+            className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-white/10"
+          />
+        )}
         <input
           value={(question.displayTitle ?? question.questionText) || ''}
           onChange={(e) => update('displayTitle', e.target.value)}
@@ -187,6 +194,21 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
               </label>
             </div>
           </div>
+
+          {/* Animation checkbox for info slides */}
+          {question.type === 'info_slide' && (
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={question.animated || false}
+                  onChange={(e) => update('animated', e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-primary-500 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-400">Pulserend effect</span>
+              </label>
+            </div>
+          )}
 
           {/* Time Limit - hide for leaderboard and info slides */}
           {question.type !== 'leaderboard_slide' && question.type !== 'info_slide' && (
@@ -362,6 +384,7 @@ export default function QuizEditor() {
   // Unified drag state for sections (rondes, tussenslides, tussenstanden)
   const [draggedSectionId, setDraggedSectionId] = useState(null);
   const [dropZoneHover, setDropZoneHover] = useState(null);
+  const [isDraggingSection, setIsDraggingSection] = useState(false);
 
   useEffect(() => {
     if (!sessionStorage.getItem('admin')) {
@@ -388,13 +411,29 @@ export default function QuizEditor() {
   const saveQuiz = async () => {
     try {
       setSaving(true);
-      
-      // Sort questions: Tussenslides (0) first, then rounds with leaderboards inserted by afterRound
-      const sortedQuestions = sortQuestionsForPlay(quiz.questions);
-      
+
+      // Save questions in their current array order (drag-drop is the source of truth).
+      // Recompute afterRound/roundNumber from positional context so the data stays consistent.
+      const reconciledQuestions = [];
+      let currentRound = 0;
+      (quiz.questions || []).forEach((q) => {
+        if (q.type === 'info_slide') {
+          reconciledQuestions.push({ ...q, roundNumber: 0, afterRound: currentRound });
+        } else if (q.type === 'leaderboard_slide') {
+          reconciledQuestions.push({ ...q, roundNumber: -1, afterRound: currentRound });
+        } else {
+          // Regular question: update currentRound based on its roundNumber
+          const r = (q.roundNumber !== undefined && q.roundNumber !== null && q.roundNumber > 0)
+            ? q.roundNumber
+            : Math.max(currentRound, 1);
+          currentRound = r;
+          reconciledQuestions.push({ ...q, roundNumber: r });
+        }
+      });
+
       const quizToSave = {
         ...quiz,
-        questions: sortedQuestions
+        questions: reconciledQuestions
       };
       
       const res = await fetch(`${API_BASE}/api/quizzes/${id}`, {
@@ -706,48 +745,82 @@ export default function QuizEditor() {
     return map;
   }, [quiz?.questions]);
 
-  // Build ordered list of all sections for rendering
+  // Build ordered list of all sections for rendering, following the actual
+  // order of questions in the array so drag-drop reordering is preserved.
   const buildOrderedSections = () => {
     if (!quiz?.questions) return [];
-    
+
     const result = [];
-    
-    // Tussenslides before round 1
-    const tussenslidesStart = intermediateSlides.filter(({ question: q }) => (q.afterRound ?? 0) === 0);
-    if (tussenslidesStart.length > 0) {
-      result.push({ type: 'tussenslides', afterRound: 0, slides: tussenslidesStart });
-    }
-    
-    // For each regular round
-    regularRounds.forEach(roundNum => {
-      const rNum = parseInt(roundNum);
-      result.push({ type: 'round', roundNumber: rNum, questions: questionsByRound[roundNum] });
-      
-      // Tussenslides after this round
-      const tussenslidesAfter = intermediateSlides.filter(({ question: q }) => (q.afterRound ?? 0) === rNum);
-      if (tussenslidesAfter.length > 0) {
-        result.push({ type: 'tussenslides', afterRound: rNum, slides: tussenslidesAfter });
+    let currentRoundGroup = null; // accumulator for consecutive same-round questions
+    let currentTussenslidesGroup = null; // accumulator for consecutive info_slides
+
+    const flushRoundGroup = () => {
+      if (currentRoundGroup) {
+        result.push(currentRoundGroup);
+        currentRoundGroup = null;
       }
-      
-      // Tussenstanden after this round
-      const tussenstandenAfter = leaderboardSlides.filter(({ question: q }) => {
-        const defaultAfter = Math.max(...regularRounds.map(r => parseInt(r)), 1);
-        return (q.afterRound ?? defaultAfter) === rNum;
-      });
-      tussenstandenAfter.forEach(({ question: q, originalIndex: i }) => {
+    };
+    const flushTussenslidesGroup = () => {
+      if (currentTussenslidesGroup) {
+        result.push(currentTussenslidesGroup);
+        currentTussenslidesGroup = null;
+      }
+    };
+
+    quiz.questions.forEach((q, i) => {
+      if (q.type === 'info_slide') {
+        flushRoundGroup();
+        const afterRound = q.afterRound ?? 0;
+        if (currentTussenslidesGroup && currentTussenslidesGroup.afterRound === afterRound) {
+          currentTussenslidesGroup.slides.push({ question: q, originalIndex: i });
+        } else {
+          flushTussenslidesGroup();
+          currentTussenslidesGroup = {
+            type: 'tussenslides',
+            afterRound,
+            slides: [{ question: q, originalIndex: i }],
+          };
+        }
+      } else if (q.type === 'leaderboard_slide') {
+        flushRoundGroup();
+        flushTussenslidesGroup();
         result.push({ type: 'tussenstand', index: i, question: q });
-      });
+      } else {
+        // multiple_choice / free_type
+        flushTussenslidesGroup();
+        const roundNumber = (q.roundNumber !== undefined && q.roundNumber !== null && q.roundNumber > 0)
+          ? q.roundNumber
+          : 1;
+        if (currentRoundGroup && currentRoundGroup.roundNumber === roundNumber) {
+          currentRoundGroup.questions.push({ question: q, originalIndex: i });
+        } else {
+          flushRoundGroup();
+          currentRoundGroup = {
+            type: 'round',
+            roundNumber,
+            questions: [{ question: q, originalIndex: i }],
+          };
+        }
+      }
     });
-    
+    flushRoundGroup();
+    flushTussenslidesGroup();
+
     return result;
   };
 
   const orderedSections = buildOrderedSections();
 
-  // Get unique ID for a section
+  // Get unique ID for a section based on first question's originalIndex
   const getSectionId = (section) => {
-    if (section.type === 'round') return `round-${section.roundNumber}`;
-    if (section.type === 'tussenslides') return `tussenslides-${section.afterRound}`;
+    if (section.type === 'round') {
+      const firstIdx = section.questions[0]?.originalIndex ?? 0;
+      return `round-${section.roundNumber}-${firstIdx}`;
+    }
+    if (section.type === 'tussenslides') {
+      const firstIdx = section.slides[0]?.originalIndex ?? 0;
+      return `tussenslides-${section.afterRound}-${firstIdx}`;
+    }
     if (section.type === 'tussenstand') return `tussenstand-${section.index}`;
     return null;
   };
@@ -755,41 +828,53 @@ export default function QuizEditor() {
   // Handle section drop - reorder sections and update quiz
   const handleSectionDrop = (dropIndex) => {
     if (!draggedSectionId) return;
-    
+
+    console.log('[handleSectionDrop] Start:', { draggedSectionId, dropIndex, totalSections: orderedSections.length });
+
     // Find dragged section
     const draggedIndex = orderedSections.findIndex(s => getSectionId(s) === draggedSectionId);
-    if (draggedIndex === -1) return;
-    
+    if (draggedIndex === -1) {
+      console.error('[handleSectionDrop] Could not find dragged section');
+      return;
+    }
+
     const draggedSection = orderedSections[draggedIndex];
-    
+    console.log('[handleSectionDrop] Dragging section:', draggedSection.type, draggedSection);
+
     // Create new ordered list
     const newSections = [...orderedSections];
     newSections.splice(draggedIndex, 1);
-    
+
     // Adjust drop index if dragging down
     const adjustedDropIndex = draggedIndex < dropIndex ? dropIndex - 1 : dropIndex;
     newSections.splice(adjustedDropIndex, 0, draggedSection);
-    
-    // Now rebuild quiz.questions based on newSections order
-    const updatedQuestions = [...quiz.questions];
-    
-    // Update afterRound for tussenslides and tussenstanden based on their new position
-    let currentRound = 0;
-    newSections.forEach((section, idx) => {
+
+    console.log('[handleSectionDrop] New section order:', newSections.map(s => s.type));
+
+    // Rebuild the entire questions array in the new section order
+    const newQuestions = [];
+    let currentRound = 0; // 0 = before any round; updated as we encounter rounds
+
+    newSections.forEach((section) => {
       if (section.type === 'round') {
         currentRound = section.roundNumber;
+        // Add all questions from this round
+        section.questions.forEach(({ question }) => {
+          newQuestions.push({ ...question, roundNumber: currentRound });
+        });
       } else if (section.type === 'tussenslides') {
-        // Update afterRound for all slides in this group
-        section.slides.forEach(({ originalIndex }) => {
-          updatedQuestions[originalIndex].afterRound = currentRound;
+        // Add all tussenslides with updated afterRound
+        section.slides.forEach(({ question }) => {
+          newQuestions.push({ ...question, roundNumber: 0, afterRound: currentRound });
         });
       } else if (section.type === 'tussenstand') {
-        // Update afterRound for this tussenstand
-        updatedQuestions[section.index].afterRound = currentRound;
+        // Add tussenstand with updated afterRound
+        newQuestions.push({ ...section.question, roundNumber: -1, afterRound: currentRound });
       }
     });
-    
-    setQuiz({ ...quiz, questions: updatedQuestions });
+
+    console.log('[handleSectionDrop] Rebuilt questions:', newQuestions.length);
+    setQuiz({ ...quiz, questions: newQuestions });
     setDraggedSectionId(null);
     setDropZoneHover(null);
   };
@@ -910,12 +995,12 @@ export default function QuizEditor() {
               <div key={sectionId || `section-${sectionIdx}`}>
                 {/* Drop zone BEFORE this section */}
                 <div
-                  className={`h-3 transition-all ${
+                  className={`transition-all ${
                     dropZoneHover === sectionIdx
-                      ? 'h-12 bg-primary-500/20 border-2 border-dashed border-primary-400 rounded-xl mb-3'
+                      ? 'h-16 bg-primary-500/30 border-2 border-dashed border-primary-400 rounded-xl mb-3'
                       : draggedSectionId
-                      ? 'hover:h-8 hover:bg-primary-500/10 hover:border border-dashed hover:border-primary-300/50 hover:rounded-xl'
-                      : ''
+                      ? 'h-10 bg-primary-500/5 border-2 border-dashed border-primary-300/30 rounded-lg mb-2'
+                      : 'h-1 bg-transparent mb-2'
                   }`}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -940,13 +1025,15 @@ export default function QuizEditor() {
                         onDragStart={(e) => {
                           e.dataTransfer.effectAllowed = 'move';
                           setDraggedSectionId(sectionId);
+                          setIsDraggingSection(true);
                         }}
                         onDragEnd={() => {
                           setDraggedSectionId(null);
                           setDropZoneHover(null);
+                          setIsDraggingSection(false);
                         }}
                         className="flex items-center gap-3 px-4 py-2 bg-primary-600/20 border border-primary-500/30 rounded-xl cursor-grab active:cursor-grabbing hover:bg-primary-600/30 transition-all"
-                        onClick={() => toggleRound(section.roundNumber)}
+                        onClick={() => !isDraggingSection && toggleRound(section.roundNumber)}
                       >
                         <GripVertical className="w-5 h-5 text-gray-500" />
                         <Hash className="w-5 h-5 text-primary-400" />
@@ -1018,13 +1105,16 @@ export default function QuizEditor() {
                         onDragStart={(e) => {
                           e.dataTransfer.effectAllowed = 'move';
                           setDraggedSectionId(sectionId);
+                          setIsDraggingSection(true);
                         }}
                         onDragEnd={() => {
                           setDraggedSectionId(null);
                           setDropZoneHover(null);
+                          setIsDraggingSection(false);
                         }}
                         className="flex items-center gap-3 px-4 py-2 bg-purple-600/20 border border-purple-500/30 rounded-xl cursor-grab active:cursor-grabbing hover:bg-purple-600/30 transition-all"
                         onClick={() => {
+                          if (isDraggingSection) return;
                           const collapseKey = `tussenslides-${section.afterRound}`;
                           setCollapsedRounds(prev => ({ ...prev, [collapseKey]: !prev[collapseKey] }));
                         }}
@@ -1110,7 +1200,7 @@ export default function QuizEditor() {
                       <Trophy className="w-5 h-5 text-yellow-400" />
                       <span className="font-bold text-lg text-yellow-300">Tussenstand</span>
                       <span className="text-xs text-gray-500 ml-2">
-                        Toont automatisch de scores na ronde {section.question.afterRound || 1}
+                        Na ronde {section.question.afterRound || 1}
                       </span>
                       <button
                         onClick={() => deleteQuestion(section.index)}
@@ -1128,12 +1218,12 @@ export default function QuizEditor() {
           {/* Drop zone AFTER last section */}
           {orderedSections.length > 0 && (
             <div
-              className={`h-3 transition-all ${
+              className={`transition-all ${
                 dropZoneHover === orderedSections.length
-                  ? 'h-12 bg-primary-500/20 border-2 border-dashed border-primary-400 rounded-xl'
+                  ? 'h-16 bg-primary-500/30 border-2 border-dashed border-primary-400 rounded-xl'
                   : draggedSectionId
-                  ? 'hover:h-8 hover:bg-primary-500/10 hover:border border-dashed hover:border-primary-300/50 hover:rounded-xl'
-                  : ''
+                  ? 'h-10 bg-primary-500/5 border-2 border-dashed border-primary-300/30 rounded-lg'
+                  : 'h-1 bg-transparent'
               }`}
               onDragOver={(e) => {
                 e.preventDefault();
