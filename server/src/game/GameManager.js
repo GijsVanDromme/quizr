@@ -249,7 +249,16 @@ export class GameSession {
         // Find best match among unmatched correct answers
         for (let i = 0; i < correctAnswers.length; i++) {
           if (matchedIndices.has(i)) continue;
-          const similarity = stringSimilarity.compareTwoStrings(playerAns, correctAnswers[i]);
+          let similarity = stringSimilarity.compareTwoStrings(playerAns, correctAnswers[i]);
+          
+          // Bonus: same first letter + similar length (helps with typos)
+          if (playerAns[0] === correctAnswers[i][0]) {
+            const lengthDiff = Math.abs(playerAns.length - correctAnswers[i].length);
+            if (lengthDiff <= 2) {
+              similarity += 0.15; // 15% bonus
+            }
+          }
+          
           if (similarity > bestSimilarity) {
             bestSimilarity = similarity;
             bestMatch = correctAnswers[i];
@@ -257,13 +266,13 @@ export class GameSession {
           }
         }
 
-        if (bestSimilarity >= 0.8) {
-          // High confidence match - auto-accept
+        if (bestSimilarity >= 0.75) {
+          // High confidence match - auto-accept (75%+)
           correctCount++;
           matchedIndices.add(bestIndex);
           matchedPlayerAnswers.push(playerAns);
-        } else if (bestSimilarity >= 0.5) {
-          // Medium confidence - flag for review
+        } else if (bestSimilarity >= 0.4) {
+          // Medium confidence - flag for review (40-75%)
           flaggedForReview.push({
             playerAnswer: playerAns,
             expectedAnswer: bestMatch,
