@@ -478,6 +478,10 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                     ) : (
                       <X className="w-5 h-5 text-quiz-red" />
                     )}
+                    {/* Team emoji/icon */}
+                    {a.emoji?.startsWith('/team-icons/')
+                      ? <img src={a.emoji} alt="" className="w-7 h-7 object-contain" />
+                      : <span className="text-xl">{a.emoji || '😀'}</span>}
                     <span className="font-bold">{a.playerName}</span>
                     {a.points > 0 && (
                       <span className={`ml-auto font-bold ${a.isCorrect ? 'text-quiz-green' : 'text-quiz-yellow'}`}>
@@ -486,9 +490,9 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                     )}
                   </div>
                   
-                  {/* Individual answers breakdown */}
+                  {/* Individual answers breakdown with manual correction */}
                   {a.answer && (
-                    <div className="ml-8 space-y-1">
+                    <div className="ml-8 space-y-2">
                       {String(a.answer).split(',').map((ans, idx) => {
                         const trimmedAns = ans.trim();
                         // Use server-provided matched details if available
@@ -496,15 +500,34 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                         const isCorrectAnswer = matched.some(m => m.toLowerCase().trim() === trimmedAns.toLowerCase()) ||
                                                correctAnswers.includes(trimmedAns.toLowerCase());
                         return (
-                          <div key={idx} className="flex items-center gap-2 text-sm">
+                          <div key={idx} className="flex items-center gap-2 text-sm group">
                             {isCorrectAnswer ? (
-                              <CheckCircle className="w-4 h-4 text-quiz-green" />
+                              <CheckCircle className="w-4 h-4 text-quiz-green flex-shrink-0" />
                             ) : (
-                              <X className="w-4 h-4 text-quiz-red" />
+                              <X className="w-4 h-4 text-quiz-red flex-shrink-0" />
                             )}
-                            <span className={isCorrectAnswer ? 'text-quiz-green' : 'text-gray-400'}>
+                            <span className={`flex-1 ${isCorrectAnswer ? 'text-quiz-green' : 'text-gray-400'}`}>
                               {trimmedAns}
                             </span>
+                            {/* Manual correction buttons */}
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!isCorrectAnswer && (
+                                <button
+                                  className="px-2 py-1 bg-quiz-green/20 hover:bg-quiz-green/30 text-quiz-green rounded text-xs font-bold"
+                                  title="Markeer als correct"
+                                >
+                                  ✓ Correct
+                                </button>
+                              )}
+                              {isCorrectAnswer && (
+                                <button
+                                  className="px-2 py-1 bg-quiz-red/20 hover:bg-quiz-red/30 text-quiz-red rounded text-xs font-bold"
+                                  title="Markeer als fout"
+                                >
+                                  ✗ Fout
+                                </button>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
