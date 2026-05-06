@@ -452,10 +452,10 @@ function PlayerResultsView({ results, playerName }) {
               <div className="space-y-2">
                 {String(myAnswer.answer).split(',').map((ans, idx) => {
                   const trimmedAns = ans.trim();
-                  const correctAnswers = Array.isArray(results.correctAnswer) 
-                    ? results.correctAnswer.map(a => a.toLowerCase().trim())
-                    : [String(results.correctAnswer).toLowerCase().trim()];
-                  const isCorrect = correctAnswers.includes(trimmedAns.toLowerCase());
+                  // Use server-provided matched/unmatched details if available
+                  const matched = myAnswer.answerDetails?.matched || [];
+                  const unmatched = myAnswer.answerDetails?.unmatched || [];
+                  const isCorrect = matched.some(m => m.toLowerCase().trim() === trimmedAns.toLowerCase());
                   
                   return (
                     <div key={idx} className="flex items-center gap-2">

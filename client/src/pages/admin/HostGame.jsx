@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   Users, Play, SkipForward, SkipBack, Trophy, BarChart3,
   CheckCircle, X, Clock, Wifi, ArrowLeft, Eye, FileText, ZoomIn,
-  Volume2, VolumeX, Pause, Play as PlayIcon, AlertCircle
+  Volume2, VolumeX, Pause, Play as PlayIcon, AlertCircle, Zap
 } from 'lucide-react';
 
 // Image Lightbox Modal
@@ -474,7 +474,7 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                     {a.isCorrect ? (
                       <CheckCircle className="w-5 h-5 text-quiz-green" />
                     ) : isPartial ? (
-                      <AlertCircle className="w-5 h-5 text-quiz-yellow" />
+                      <Zap className="w-5 h-5 text-quiz-yellow" />
                     ) : (
                       <X className="w-5 h-5 text-quiz-red" />
                     )}
@@ -491,7 +491,10 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                     <div className="ml-8 space-y-1">
                       {String(a.answer).split(',').map((ans, idx) => {
                         const trimmedAns = ans.trim();
-                        const isCorrectAnswer = correctAnswers.includes(trimmedAns.toLowerCase());
+                        // Use server-provided matched details if available
+                        const matched = a.answerDetails?.matched || [];
+                        const isCorrectAnswer = matched.some(m => m.toLowerCase().trim() === trimmedAns.toLowerCase()) ||
+                                               correctAnswers.includes(trimmedAns.toLowerCase());
                         return (
                           <div key={idx} className="flex items-center gap-2 text-sm">
                             {isCorrectAnswer ? (
