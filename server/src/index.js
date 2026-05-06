@@ -282,6 +282,38 @@ io.on('connection', (socket) => {
     callback({ paused });
   });
 
+  // HOST: Get pending reviews
+  socket.on('host:get-pending-reviews', (callback) => {
+    const session = gameManager.getSessionBySocket(socket.id);
+    if (!session) return callback({ error: 'No active session' });
+
+    const reviews = session.getPendingReviews();
+    callback({ reviews });
+  });
+
+  // HOST: Review answer
+  socket.on('host:review-answer', ({ playerId, answerIndex, approved }, callback) => {
+    const session = gameManager.getSessionBySocket(socket.id);
+    if (!session) return callback({ error: 'No active session' });
+
+    const result = session.reviewAnswer(playerId, answerIndex, approved);
+    if (result.error) return callback({ error: result.error });
+
+    // Notify all clients about score update
+    io.to(`game:${session.pin}`).emit('game:score-updated', {
+      playerId,
+      newScore: result.newScore
+    });
+
+    // Notify player their answer was reviewed
+    io.to(playerId).emit('game:answer-reviewed', {
+      approved,
+      newScore: result.newScore
+    });
+
+    callback(result);
+  });
+
   // PLAYER: Submit answer
   socket.on('player:answer', (answer, callback) => {
     const session = gameManager.getSessionBySocket(socket.id);
@@ -295,6 +327,15 @@ io.on('connection', (socket) => {
       count: session.answerCount,
       total: session.players.size
     });
+
+    // Notify host about pending reviews
+    const pendingReviews = session.getPendingReviews();
+    if (pendingReviews.length > 0) {
+      io.to(session.hostSocketId).emit('game:pending-reviews', {
+        count: pendingReviews.length,
+        reviews: pendingReviews
+      });
+    }
 
     // If all answered, auto-show results
     if (result.allAnswered) {

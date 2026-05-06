@@ -1,3 +1,5 @@
+import stringSimilarity from 'string-similarity';
+
 // Sort questions for quiz playback:
 // - Info_slides (roundNumber=0) with afterRound=0 come first (before any round)
 // - For each round: questions, then info_slides with afterRound=roundNum, then leaderboards with afterRound=roundNum
@@ -67,6 +69,7 @@ export class GameSession {
     this.pausedTimer = null;
     this.paused = false;
     this.questionStartTime = null;
+    this.pendingReviews = []; // Answers flagged for manual review
   }
 
   addPlayer(socketId, name, emoji) {
@@ -236,21 +239,53 @@ export class GameSession {
       const matchedIndices = new Set();
       const matchedPlayerAnswers = [];
       const unmatchedPlayerAnswers = [];
+      const flaggedForReview = [];
 
       for (const playerAns of playerAnswers) {
-        let found = false;
+        let bestMatch = null;
+        let bestSimilarity = 0;
+        let bestIndex = -1;
+
+        // Find best match among unmatched correct answers
         for (let i = 0; i < correctAnswers.length; i++) {
-          if (!matchedIndices.has(i) && playerAns === correctAnswers[i]) {
-            correctCount++;
-            matchedIndices.add(i);
-            matchedPlayerAnswers.push(playerAns);
-            found = true;
-            break;
+          if (matchedIndices.has(i)) continue;
+          const similarity = stringSimilarity.compareTwoStrings(playerAns, correctAnswers[i]);
+          if (similarity > bestSimilarity) {
+            bestSimilarity = similarity;
+            bestMatch = correctAnswers[i];
+            bestIndex = i;
           }
         }
-        if (!found) {
+
+        if (bestSimilarity >= 0.8) {
+          // High confidence match - auto-accept
+          correctCount++;
+          matchedIndices.add(bestIndex);
+          matchedPlayerAnswers.push(playerAns);
+        } else if (bestSimilarity >= 0.5) {
+          // Medium confidence - flag for review
+          flaggedForReview.push({
+            playerAnswer: playerAns,
+            expectedAnswer: bestMatch,
+            similarity: bestSimilarity,
+            answerIndex: bestIndex
+          });
+          unmatchedPlayerAnswers.push(playerAns);
+        } else {
+          // Low confidence - auto-reject
           unmatchedPlayerAnswers.push(playerAns);
         }
+      }
+
+      // If answers flagged for review, add to pending reviews
+      if (flaggedForReview.length > 0) {
+        this.pendingReviews.push({
+          playerId: socketId,
+          playerName: player.name,
+          questionIndex: this.currentQuestionIndex,
+          flaggedAnswers: flaggedForReview,
+          timestamp: Date.now()
+        });
       }
 
       // Calculate partial score based on correct count
@@ -262,7 +297,8 @@ export class GameSession {
       // Store matched/unmatched for feedback
       player.lastAnswerDetails = {
         matched: matchedPlayerAnswers,
-        unmatched: unmatchedPlayerAnswers
+        unmatched: unmatchedPlayerAnswers,
+        pendingReview: flaggedForReview.length > 0
       };
     }
 
@@ -368,6 +404,63 @@ export class GameSession {
         totalAnswers: p.totalAnswers,
         streak: p.streak,
       }));
+  }
+
+  getPendingReviews() {
+    return this.pendingReviews.filter(r => r.questionIndex === this.currentQuestionIndex);
+  }
+
+  reviewAnswer(playerId, answerIndex, approved) {
+    const player = this.players.get(playerId);
+    if (!player) return { error: 'Player not found' };
+
+    const question = this.quiz.questions[this.currentQuestionIndex];
+    if (question.type !== 'free_type') return { error: 'Not a free type question' };
+
+    // Find the pending review for this player
+    const reviewIdx = this.pendingReviews.findIndex(
+      r => r.playerId === playerId && r.questionIndex === this.currentQuestionIndex
+    );
+    if (reviewIdx === -1) return { error: 'No pending review found' };
+
+    const review = this.pendingReviews[reviewIdx];
+    const flaggedAnswer = review.flaggedAnswers.find(a => a.answerIndex === answerIndex);
+    if (!flaggedAnswer) return { error: 'Answer not found' };
+
+    if (approved) {
+      // Award points for approved answer
+      const points = 100;
+      player.score += points;
+      
+      // Update player's answer record
+      const answerRecord = player.answers.find(a => a.questionIndex === this.currentQuestionIndex);
+      if (answerRecord) {
+        answerRecord.points += points;
+        answerRecord.reviewedCorrect = true;
+      }
+
+      // Update details
+      if (player.lastAnswerDetails) {
+        player.lastAnswerDetails.matched.push(flaggedAnswer.playerAnswer);
+        const idx = player.lastAnswerDetails.unmatched.indexOf(flaggedAnswer.playerAnswer);
+        if (idx > -1) player.lastAnswerDetails.unmatched.splice(idx, 1);
+      }
+    }
+
+    // Remove this flagged answer from the review
+    review.flaggedAnswers = review.flaggedAnswers.filter(a => a.answerIndex !== answerIndex);
+    
+    // If no more flagged answers for this player, remove the review
+    if (review.flaggedAnswers.length === 0) {
+      this.pendingReviews.splice(reviewIdx, 1);
+    }
+
+    return { 
+      success: true, 
+      playerName: player.name,
+      newScore: player.score,
+      remainingReviews: this.getPendingReviews().length
+    };
   }
 }
 

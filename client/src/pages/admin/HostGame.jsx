@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   Users, Play, SkipForward, SkipBack, Trophy, BarChart3,
   CheckCircle, X, Clock, Wifi, ArrowLeft, Eye, FileText, ZoomIn,
-  Volume2, VolumeX, Pause, Play as PlayIcon
+  Volume2, VolumeX, Pause, Play as PlayIcon, AlertCircle
 } from 'lucide-react';
 
 // Image Lightbox Modal
@@ -27,6 +27,78 @@ function ImageLightbox({ imageUrl, onClose }) {
         className="max-w-full max-h-full object-contain rounded-lg"
         onClick={(e) => e.stopPropagation()}
       />
+    </div>
+  );
+}
+
+// Review Modal for manual answer checking
+function ReviewModal({ reviews, onReview, onClose }) {
+  if (!reviews || reviews.length === 0) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+      <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-yellow-400" />
+            <h2 className="text-2xl font-bold">Antwoorden beoordelen</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {reviews.map((review, idx) => (
+            <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-2xl">{review.playerName}</span>
+                <span className="text-lg font-bold text-gray-300">{review.playerName}</span>
+              </div>
+              
+              {review.flaggedAnswers.map((answer, ansIdx) => (
+                <div key={ansIdx} className="bg-white/5 rounded-lg p-3 mb-2">
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Antwoord speler:</p>
+                      <p className="font-bold text-yellow-300">{answer.playerAnswer}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Verwacht antwoord:</p>
+                      <p className="font-bold text-green-300">{answer.expectedAnswer}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex-1 bg-white/10 rounded-full h-2">
+                      <div 
+                        className="bg-yellow-400 h-2 rounded-full transition-all"
+                        style={{ width: `${answer.similarity * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-400">{Math.round(answer.similarity * 100)}% match</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onReview(review.playerId, answer.answerIndex, true)}
+                      className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-bold flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Goedkeuren
+                    </button>
+                    <button
+                      onClick={() => onReview(review.playerId, answer.answerIndex, false)}
+                      className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-bold flex items-center justify-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      Afkeuren
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -104,7 +176,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
   );
 }
 
-function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause }) {
+function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause, pendingReviewsCount, onOpenReviews }) {
   // (info slide & question screens both receive onPrevious)
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
@@ -230,6 +302,16 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
           >
             {musicEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
           </button>
+          {pendingReviewsCount > 0 && (
+            <button
+              onClick={onOpenReviews}
+              className="relative px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full font-bold flex items-center gap-2 animate-pulse"
+              title="Antwoorden beoordelen"
+            >
+              <AlertCircle className="w-5 h-5" />
+              {pendingReviewsCount}
+            </button>
+          )}
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-lg ${isPaused ? 'bg-quiz-yellow text-black' : (timeLeft <= 5 ? 'bg-quiz-red/20 text-quiz-red animate-pulse' : 'bg-white/10')}`}>
             <Clock className="w-5 h-5" />
             {isPaused ? 'PAUSED' : `${timeLeft}s`}
@@ -556,6 +638,8 @@ export default function HostGame() {
   const [currentQuestionNum, setCurrentQuestionNum] = useState(0);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [pendingReviews, setPendingReviews] = useState([]);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const audioRef = useRef(null);
 
   // Initialize audio once
@@ -613,6 +697,17 @@ export default function HostGame() {
     socket.on('game:player-left', ({ players: p }) => setPlayers(p));
     socket.on('game:answer-count', ({ count }) => setAnswerCount(count));
 
+    socket.on('game:pending-reviews', ({ reviews }) => {
+      setPendingReviews(reviews);
+    });
+
+    socket.on('game:score-updated', ({ playerId, newScore }) => {
+      // Update leaderboard if visible
+      setLeaderboard(prev => prev.map(p => 
+        p.id === playerId ? { ...p, score: newScore } : p
+      ));
+    });
+
     socket.on('game:question-results', (r) => {
       setResults(r);
       setGameState('results');
@@ -622,6 +717,8 @@ export default function HostGame() {
       socket.off('game:player-joined');
       socket.off('game:player-left');
       socket.off('game:answer-count');
+      socket.off('game:pending-reviews');
+      socket.off('game:score-updated');
       socket.off('game:question-results');
     };
   }, [socket]);
@@ -700,6 +797,33 @@ export default function HostGame() {
     });
   }, [socket]);
 
+  const handleReview = useCallback((playerId, answerIndex, approved) => {
+    socket.emit('host:review-answer', { playerId, answerIndex, approved }, (response) => {
+      if (response.error) {
+        console.error('Review error:', response.error);
+        return;
+      }
+      // Update pending reviews
+      setPendingReviews(prev => {
+        const updated = prev.map(r => {
+          if (r.playerId === playerId) {
+            return {
+              ...r,
+              flaggedAnswers: r.flaggedAnswers.filter(a => a.answerIndex !== answerIndex)
+            };
+          }
+          return r;
+        }).filter(r => r.flaggedAnswers.length > 0);
+        
+        // Close modal if no more reviews
+        if (updated.length === 0) {
+          setShowReviewModal(false);
+        }
+        return updated;
+      });
+    });
+  }, [socket]);
+
   const showResults = useCallback(() => {
     console.log('[DEBUG Host] showResults called, question type:', currentQuestion?.type);
     if (currentQuestion?.type === 'info_slide') {
@@ -746,19 +870,30 @@ export default function HostGame() {
 
   if (gameState === 'question') {
     return (
-      <QuestionScreen
-        question={currentQuestion}
-        answerCount={answerCount}
-        totalPlayers={players.length}
-        onShowResults={showResults}
-        onPrevious={previousQuestion}
-        onSkipNext={nextQuestion}
-        timeLeft={timeLeft}
-        musicEnabled={musicEnabled}
-        onToggleMusic={() => setMusicEnabled(!musicEnabled)}
-        isPaused={isPaused}
-        onTogglePause={togglePause}
-      />
+      <>
+        <QuestionScreen
+          question={currentQuestion}
+          answerCount={answerCount}
+          totalPlayers={players.length}
+          onShowResults={showResults}
+          onPrevious={previousQuestion}
+          onSkipNext={nextQuestion}
+          timeLeft={timeLeft}
+          musicEnabled={musicEnabled}
+          onToggleMusic={() => setMusicEnabled(!musicEnabled)}
+          isPaused={isPaused}
+          onTogglePause={togglePause}
+          pendingReviewsCount={pendingReviews.length}
+          onOpenReviews={() => setShowReviewModal(true)}
+        />
+        {showReviewModal && (
+          <ReviewModal
+            reviews={pendingReviews}
+            onReview={handleReview}
+            onClose={() => setShowReviewModal(false)}
+          />
+        )}
+      </>
     );
   }
 
