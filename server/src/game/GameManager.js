@@ -300,7 +300,7 @@ export class GameSession {
       // Calculate partial score based on correct count
       const totalExpected = correctAnswers.length;
       const scoreRatio = totalExpected > 0 ? correctCount / totalExpected : 0;
-      isCorrect = scoreRatio >= 0.5; // At least 50% correct counts as correct
+      isCorrect = scoreRatio === 1.0; // Only fully correct (100%) counts as correct
       partialScore = Math.round(scoreRatio * 1000); // Up to 1000 points for correct answers
       
       // Store matched/unmatched for feedback

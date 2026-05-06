@@ -461,18 +461,55 @@ function ResultsScreen({ results, onShowLeaderboard }) {
               {Array.isArray(results.correctAnswer) ? results.correctAnswer.join(', ') : results.correctAnswer}
             </p>
           </div>
-          <div className="space-y-2">
-            {results.answers?.map((a, i) => (
-              <div
-                key={i}
-                className={`flex items-center gap-3 p-3 rounded-xl ${a.isCorrect ? 'bg-quiz-green/10 border border-quiz-green/30' : 'bg-white/5 border border-white/10'}`}
-              >
-                {a.isCorrect ? <CheckCircle className="w-5 h-5 text-quiz-green" /> : <X className="w-5 h-5 text-gray-500" />}
-                <span className="font-medium">{a.playerName}</span>
-                <span className="text-gray-400 flex-1 text-right">{a.answer ?? '(geen antwoord)'}</span>
-                {a.isCorrect && <span className="text-quiz-green font-bold">+{a.points}</span>}
-              </div>
-            ))}
+          <div className="space-y-3">
+            {results.answers?.map((a, i) => {
+              const isPartial = !a.isCorrect && a.points > 0;
+              const correctAnswers = Array.isArray(results.correctAnswer) 
+                ? results.correctAnswer.map(ans => ans.toLowerCase().trim())
+                : [String(results.correctAnswer).toLowerCase().trim()];
+              
+              return (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    {a.isCorrect ? (
+                      <CheckCircle className="w-5 h-5 text-quiz-green" />
+                    ) : isPartial ? (
+                      <AlertCircle className="w-5 h-5 text-quiz-yellow" />
+                    ) : (
+                      <X className="w-5 h-5 text-quiz-red" />
+                    )}
+                    <span className="font-bold">{a.playerName}</span>
+                    {a.points > 0 && (
+                      <span className={`ml-auto font-bold ${a.isCorrect ? 'text-quiz-green' : 'text-quiz-yellow'}`}>
+                        +{a.points}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Individual answers breakdown */}
+                  {a.answer && (
+                    <div className="ml-8 space-y-1">
+                      {String(a.answer).split(',').map((ans, idx) => {
+                        const trimmedAns = ans.trim();
+                        const isCorrectAnswer = correctAnswers.includes(trimmedAns.toLowerCase());
+                        return (
+                          <div key={idx} className="flex items-center gap-2 text-sm">
+                            {isCorrectAnswer ? (
+                              <CheckCircle className="w-4 h-4 text-quiz-green" />
+                            ) : (
+                              <X className="w-4 h-4 text-quiz-red" />
+                            )}
+                            <span className={isCorrectAnswer ? 'text-quiz-green' : 'text-gray-400'}>
+                              {trimmedAns}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
