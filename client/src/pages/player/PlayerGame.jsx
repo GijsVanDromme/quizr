@@ -211,9 +211,9 @@ function QuestionView({ question, onAnswer, timeLeft }) {
         </div>
 
         {/* Image + Question text */}
-        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4 gap-6">
           {question.imageUrl && (
-            <div className="relative mb-4 w-full max-w-md">
+            <div className="relative w-full max-w-md flex-shrink-0">
               <img
                 src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
                 alt="Info slide"
@@ -221,7 +221,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
               />
             </div>
           )}
-          <h2 className={`text-xl font-bold text-center leading-snug ${question.animated ? 'animate-pulse' : ''}`}>
+          <h2 className={`text-xl md:text-2xl font-bold text-center leading-snug px-2 ${question.animated ? 'animate-pulse' : ''}`}>
             {question.questionText}
           </h2>
         </div>
@@ -437,12 +437,43 @@ function PlayerResultsView({ results, playerName }) {
       )}
 
       {results.type === 'free_type' && (
-        <div className="w-full max-w-md mb-6 p-4 bg-quiz-green/10 border border-quiz-green/30 rounded-xl">
-          <p className="text-gray-400 text-sm mb-1">Correcte antwoord(en):</p>
-          <p className="text-quiz-green font-bold text-lg">
-            {Array.isArray(results.correctAnswer) ? results.correctAnswer.join(', ') : results.correctAnswer}
-          </p>
-        </div>
+        <>
+          <div className="w-full max-w-md mb-4 p-4 bg-quiz-green/10 border border-quiz-green/30 rounded-xl">
+            <p className="text-gray-400 text-sm mb-1">Correcte antwoord(en):</p>
+            <p className="text-quiz-green font-bold text-lg">
+              {Array.isArray(results.correctAnswer) ? results.correctAnswer.join(', ') : results.correctAnswer}
+            </p>
+          </div>
+          
+          {/* Show player's individual answers with icons */}
+          {myAnswer?.answer && (
+            <div className="w-full max-w-md mb-6 p-4 bg-white/5 border border-white/10 rounded-xl">
+              <p className="text-gray-400 text-sm mb-3">Jouw antwoorden:</p>
+              <div className="space-y-2">
+                {String(myAnswer.answer).split(',').map((ans, idx) => {
+                  const trimmedAns = ans.trim();
+                  const correctAnswers = Array.isArray(results.correctAnswer) 
+                    ? results.correctAnswer.map(a => a.toLowerCase().trim())
+                    : [String(results.correctAnswer).toLowerCase().trim()];
+                  const isCorrect = correctAnswers.includes(trimmedAns.toLowerCase());
+                  
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      {isCorrect ? (
+                        <CheckCircle className="w-5 h-5 text-quiz-green flex-shrink-0" />
+                      ) : (
+                        <X className="w-5 h-5 text-quiz-red flex-shrink-0" />
+                      )}
+                      <span className={`font-medium ${isCorrect ? 'text-quiz-green' : 'text-gray-400'}`}>
+                        {trimmedAns}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <div className="w-full max-w-md">
