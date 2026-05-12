@@ -232,7 +232,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
 }
 
 function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause, pendingReviewsCount, onOpenReviews, pin, players, playersLookingAway }) {
-  // (info slide & question screens both receive onPrevious)
+  const [showQR, setShowQR] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
   const optionShapes = ['△', '◇', '○', '□'];
@@ -333,9 +333,40 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
             </span>
           )}
           {pin && (
-            <span className="px-3 py-1 bg-white/10 text-gray-300 rounded-full text-sm font-bold">
+            <button
+              onClick={() => setShowQR(true)}
+              className="px-3 py-1 bg-white/10 hover:bg-white/20 text-gray-300 rounded-full text-sm font-bold cursor-pointer transition-colors"
+              title="Toon QR code"
+            >
               PIN: {pin}
-            </span>
+            </button>
+          )}
+          {showQR && (
+            <div 
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+              onClick={() => setShowQR(false)}
+            >
+              <div 
+                className="bg-white rounded-2xl p-8 max-w-sm w-full text-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-2xl font-bold mb-4 text-gray-900">Scan om mee te doen!</h3>
+                <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                  <QRCodeSVG 
+                    value={`${window.location.origin.includes('localhost') ? 'http://192.168.0.169:5173' : window.location.origin}/play?pin=${pin}`} 
+                    size={200} 
+                    level="M" 
+                  />
+                </div>
+                <p className="text-gray-600 text-lg font-bold">PIN: {pin}</p>
+                <button
+                  onClick={() => setShowQR(false)}
+                  className="mt-4 px-6 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-colors"
+                >
+                  Sluiten
+                </button>
+              </div>
+            </div>
           )}
         </div>
         {isPaused && (

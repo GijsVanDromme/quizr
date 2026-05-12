@@ -693,6 +693,7 @@ export default function PlayerGame() {
   const [antiCheatVisible, setAntiCheatVisible] = useState(false);
   const [antiCheatMessage, setAntiCheatMessage] = useState('');
   const [cheatCount, setCheatCount] = useState(0);
+  const [playerScore, setPlayerScore] = useState(0);
   
   // Use refs to avoid recreating handlers on every render
   const navigateRef = useRef(navigate);
@@ -857,13 +858,23 @@ export default function PlayerGame() {
       setDebugInfo(d => ({ ...d, lastEvent: 'results', eventCount: d.eventCount + 1 }));
       setQuestionResults(r);
       setGameState('results');
+      // Update player score from results
+      const myAnswer = r.answers?.find(a => a.playerName === playerName);
+      if (myAnswer) {
+        setPlayerScore(myAnswer.totalScore || 0);
+      }
     };
-    
+
     const onBatchResults = (br) => {
       console.log('[DEBUG Player] ✅ game:batch-results', br?.roundTitle);
       setDebugInfo(d => ({ ...d, lastEvent: 'batch-results', eventCount: d.eventCount + 1 }));
       setBatchResults(br);
       setGameState('batch-results');
+      // Update player score from batch results
+      const myResults = br.results?.find(r => r.playerName === playerName);
+      if (myResults) {
+        setPlayerScore(myResults.totalScore || 0);
+      }
     };
 
     const onLeaderboard = ({ leaderboard: lb }) => {
@@ -871,13 +882,23 @@ export default function PlayerGame() {
       setDebugInfo(d => ({ ...d, lastEvent: 'leaderboard', eventCount: d.eventCount + 1 }));
       setLeaderboard(lb);
       setGameState('leaderboard');
+      // Update player score from leaderboard
+      const myData = lb?.find(p => p.name === playerName);
+      if (myData) {
+        setPlayerScore(myData.score || 0);
+      }
     };
-    
+
     const onFinished = ({ leaderboard: lb }) => {
       console.log('[DEBUG Player] ✅ game:finished');
       setDebugInfo(d => ({ ...d, lastEvent: 'finished', eventCount: d.eventCount + 1 }));
       setLeaderboard(lb);
       setGameState('finished');
+      // Update player score from leaderboard
+      const myData = lb?.find(p => p.name === playerName);
+      if (myData) {
+        setPlayerScore(myData.score || 0);
+      }
     };
     
     const onPaused = ({ paused }) => {
@@ -1070,6 +1091,10 @@ export default function PlayerGame() {
             ? <img src={playerEmoji} alt="" className="w-9 h-9 object-contain flex-shrink-0" />
             : <span className="text-2xl flex-shrink-0">{playerEmoji || '😀'}</span>}
           <span className="font-bold text-white truncate flex-1">{playerName}</span>
+          <div className="flex items-center gap-2 text-quiz-yellow">
+            <Star className="w-5 h-5" />
+            <span className="font-bold text-lg">{playerScore.toLocaleString()}</span>
+          </div>
         </div>
       )}
     </>
