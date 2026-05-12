@@ -1121,16 +1121,23 @@ export default function HostGame() {
           return prev;
         }
         const newTime = prev - 1;
-        // Auto-advance to results when timer reaches 0
-        if (newTime === 0) {
-          setTimeout(() => showResults(), 500); // Small delay for better UX
-        }
         return newTime;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [gameState, currentQuestion, isPaused, showResults]);
+  }, [gameState, currentQuestion, isPaused]);
+
+  // Auto-advance when timer reaches 0 (separate effect to avoid circular deps)
+  useEffect(() => {
+    if (gameState === 'question' && timeLeft === 0 && !isPaused && socket) {
+      const timer = setTimeout(() => {
+        console.log('[DEBUG Host] Timer reached 0, auto-advancing to results');
+        showResults();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState, timeLeft, isPaused, socket, showResults]);
 
   // Socket events
   useEffect(() => {
