@@ -9,6 +9,7 @@ function fromRow(row) {
     description: row.description || '',
     questions: row.questions || [],
     roundTitles: row.round_titles || {},
+    roundSettings: row.round_settings || {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -22,6 +23,7 @@ function toRow(quiz) {
     description: quiz.description ?? '',
     questions: quiz.questions ?? [],
     round_titles: quiz.roundTitles ?? {},
+    round_settings: quiz.roundSettings ?? {},
     updated_at: new Date().toISOString(),
   };
 }

@@ -403,9 +403,42 @@ export default function QuizEditor() {
       }
       const data = await res.json();
       setQuiz(data);
+
+      // Default: collapse all rounds and tussenslide sections
+      const initialCollapsed = {};
+      const roundNumbers = new Set();
+      const afterRounds = new Set();
+      (data.questions || []).forEach(q => {
+        if (q.roundNumber > 0) roundNumbers.add(q.roundNumber);
+        if (q.roundNumber === 0 && q.afterRound !== undefined) afterRounds.add(q.afterRound);
+      });
+      roundNumbers.forEach(r => { initialCollapsed[r] = true; });
+      afterRounds.forEach(r => { initialCollapsed[`tussenslides-${r}`] = true; });
+      setCollapsedRounds(initialCollapsed);
     } catch (e) {
       setError('Kon geen verbinding maken met de server. Is de client env var VITE_API_URL juist en is de server online?');
     }
+  };
+
+  const toggleAllSections = () => {
+    if (!quiz) return;
+    const roundNumbers = new Set();
+    const afterRounds = new Set();
+    (quiz.questions || []).forEach(q => {
+      if (q.roundNumber > 0) roundNumbers.add(q.roundNumber);
+      if (q.roundNumber === 0 && q.afterRound !== undefined) afterRounds.add(q.afterRound);
+    });
+    
+    // Check if any section is currently expanded
+    const allKeys = [
+      ...Array.from(roundNumbers).map(r => String(r)),
+      ...Array.from(afterRounds).map(r => `tussenslides-${r}`)
+    ];
+    const anyExpanded = allKeys.some(k => !collapsedRounds[k]);
+    
+    const newState = {};
+    allKeys.forEach(k => { newState[k] = anyExpanded; }); // If anything expanded -> collapse all, else expand all
+    setCollapsedRounds(newState);
   };
 
   const saveQuiz = async () => {
@@ -417,17 +450,23 @@ export default function QuizEditor() {
       const reconciledQuestions = [];
       let currentRound = 0;
       (quiz.questions || []).forEach((q) => {
+        // Ensure animated property exists with default value
+        const questionWithDefaults = {
+          ...q,
+          animated: q.animated ?? false
+        };
+        
         if (q.type === 'info_slide') {
-          reconciledQuestions.push({ ...q, roundNumber: 0, afterRound: currentRound });
+          reconciledQuestions.push({ ...questionWithDefaults, roundNumber: 0, afterRound: currentRound });
         } else if (q.type === 'leaderboard_slide') {
-          reconciledQuestions.push({ ...q, roundNumber: -1, afterRound: currentRound });
+          reconciledQuestions.push({ ...questionWithDefaults, roundNumber: -1, afterRound: currentRound });
         } else {
           // Regular question: update currentRound based on its roundNumber
           const r = (q.roundNumber !== undefined && q.roundNumber !== null && q.roundNumber > 0)
             ? q.roundNumber
             : Math.max(currentRound, 1);
           currentRound = r;
-          reconciledQuestions.push({ ...q, roundNumber: r });
+          reconciledQuestions.push({ ...questionWithDefaults, roundNumber: r });
         }
       });
 
@@ -466,6 +505,7 @@ export default function QuizEditor() {
       inputFields: 1,
       timeLimit: 20,
       roundNumber,
+      animated: false,
     };
     setQuiz({ ...quiz, questions: [...quiz.questions, newQ] });
   };
@@ -484,6 +524,7 @@ export default function QuizEditor() {
       correctAnswers: [],
       inputFields: 1,
       timeLimit: 20,
+      animated: false,
       roundNumber: 0,
       afterRound: defaultAfter,
     };
@@ -509,6 +550,7 @@ export default function QuizEditor() {
       timeLimit: 20,
       roundNumber: -1,
       afterRound: maxRound, // Show leaderboard after this round
+      animated: false,
     };
     setQuiz({ ...quiz, questions: [...quiz.questions, newQ] });
   };
@@ -951,9 +993,30 @@ export default function QuizEditor() {
             </div>
           </div>
           <button
+            onClick={toggleAllSections}
+            className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors flex items-center gap-2"
+            title="Alle rondes in/uitklappen"
+          >
+            <Hash className="w-4 h-4" />
+            {(() => {
+              if (!quiz) return <ChevronDown className="w-4 h-4" />;
+              const allKeys = [];
+              const rounds = new Set();
+              const afters = new Set();
+              (quiz.questions || []).forEach(q => {
+                if (q.roundNumber > 0) rounds.add(q.roundNumber);
+                if (q.roundNumber === 0 && q.afterRound !== undefined) afters.add(q.afterRound);
+              });
+              rounds.forEach(r => allKeys.push(String(r)));
+              afters.forEach(r => allKeys.push(`tussenslides-${r}`));
+              const anyExpanded = allKeys.some(k => !collapsedRounds[k]);
+              return anyExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
+            })()}
+          </button>
+          <button
             onClick={toggleAllQuestions}
             className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors flex items-center gap-2"
-            title="Alles in/uitklappen"
+            title="Alle vragen in/uitklappen"
           >
             {Object.values(expandedQuestions).some(v => v) ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -1052,6 +1115,24 @@ export default function QuizEditor() {
                         </span>
                         
                         <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <label className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={quiz.roundSettings?.[section.roundNumber]?.showResultsAfterRound === true}
+                              onChange={(e) => setQuiz({
+                                ...quiz,
+                                roundSettings: {
+                                  ...(quiz.roundSettings || {}),
+                                  [section.roundNumber]: {
+                                    ...(quiz.roundSettings?.[section.roundNumber] || {}),
+                                    showResultsAfterRound: e.target.checked
+                                  }
+                                }
+                              })}
+                              className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-xs text-gray-300">Resultaten na ronde</span>
+                          </label>
                           <button
                             onClick={() => addQuestionToRound(section.roundNumber, 'multiple_choice')}
                             className="px-2 py-1 bg-primary-600/30 hover:bg-primary-600/50 border border-primary-500/30 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"

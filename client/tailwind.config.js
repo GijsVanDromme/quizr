@@ -30,6 +30,7 @@ export default {
         'fade-in': 'fadeIn 0.3s ease-out',
         'bounce-in': 'bounceIn 0.5s ease-out',
         'pulse-slow': 'pulse 3s infinite',
+        'breathing': 'breathing 3s ease-in-out infinite',
       },
       keyframes: {
         slideUp: {
@@ -44,6 +45,11 @@ export default {
           '0%': { transform: 'scale(0.9)', opacity: '0' },
           '50%': { transform: 'scale(1.05)' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        breathing: {
+          '0%': { transform: 'scale(1)', filter: 'brightness(1)' },
+          '50%': { transform: 'scale(1.02)', filter: 'brightness(1.1)' },
+          '100%': { transform: 'scale(1)', filter: 'brightness(1)' },
         },
       },
     },

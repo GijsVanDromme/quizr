@@ -34,6 +34,7 @@ router.post('/', async (req, res) => {
       description: req.body.description || '',
       questions: req.body.questions || [],
       roundTitles: req.body.roundTitles || {},
+      roundSettings: req.body.roundSettings || {},
       createdAt: new Date().toISOString(),
     };
     const saved = await saveQuiz(quiz);
@@ -55,6 +56,7 @@ router.put('/:id', async (req, res) => {
       description: req.body.description ?? existing.description,
       questions: req.body.questions ?? existing.questions,
       roundTitles: (req.body.roundTitles ?? existing.roundTitles) || {},
+      roundSettings: (req.body.roundSettings ?? existing.roundSettings) || {},
     };
     const saved = await saveQuiz(updated);
     res.json(saved);

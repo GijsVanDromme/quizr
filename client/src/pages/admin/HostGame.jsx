@@ -5,8 +5,61 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   Users, Play, SkipForward, SkipBack, Trophy, BarChart3,
   CheckCircle, X, Clock, Wifi, ArrowLeft, Eye, FileText, ZoomIn,
-  Volume2, VolumeX, Pause, Play as PlayIcon, AlertCircle, Zap
+  Volume2, VolumeX, Pause, Play as PlayIcon, AlertCircle, Zap, Hash
 } from 'lucide-react';
+
+// Round Navigation Bar - shown in preview/debug mode
+function RoundNavBar({ quizData, currentQuestion, onJump }) {
+  if (!quizData?.questions) return null;
+
+  // Build sections: rounds + leaderboards/info slides as anchor points
+  const sections = [];
+  let lastRound = -1;
+  quizData.questions.forEach((q, idx) => {
+    if (q.type === 'leaderboard_slide') {
+      sections.push({ type: 'leaderboard', index: idx, label: 'Tussenstand', afterRound: q.afterRound });
+    } else if (q.type === 'info_slide') {
+      // Group consecutive info slides
+      const last = sections[sections.length - 1];
+      if (last && last.type === 'info' && last.afterRound === q.afterRound) {
+        last.endIndex = idx;
+        last.count++;
+      } else {
+        sections.push({ type: 'info', index: idx, endIndex: idx, count: 1, label: 'Info', afterRound: q.afterRound });
+      }
+    } else if (q.roundNumber > 0 && q.roundNumber !== lastRound) {
+      lastRound = q.roundNumber;
+      const title = quizData.roundTitles?.[q.roundNumber] || `Ronde ${q.roundNumber}`;
+      sections.push({ type: 'round', index: idx, label: title, roundNumber: q.roundNumber });
+    }
+  });
+
+  const currentIdx = currentQuestion ? (currentQuestion.questionNumber - 1) : -1;
+
+  return (
+    <div className="bg-black/40 backdrop-blur-sm border-b border-white/10 px-4 py-2 flex items-center gap-2 overflow-x-auto sticky top-0 z-30">
+      <span className="text-xs text-yellow-400 font-bold whitespace-nowrap mr-2">DEBUG:</span>
+      {sections.map((s, i) => {
+        const isActive = currentIdx >= s.index && (s.endIndex === undefined ? (i === sections.length - 1 || currentIdx < sections[i + 1].index) : currentIdx <= s.endIndex);
+        const colors = s.type === 'round' 
+          ? (isActive ? 'bg-primary-600 text-white' : 'bg-primary-600/20 text-primary-300 hover:bg-primary-600/40')
+          : s.type === 'leaderboard'
+          ? (isActive ? 'bg-quiz-yellow text-black' : 'bg-quiz-yellow/20 text-yellow-300 hover:bg-quiz-yellow/40')
+          : (isActive ? 'bg-blue-500 text-white' : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/40');
+        return (
+          <button
+            key={i}
+            onClick={() => onJump(s.index)}
+            className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${colors}`}
+            title={`Spring naar slide ${s.index + 1}`}
+          >
+            {s.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // Image Lightbox Modal
 function ImageLightbox({ imageUrl, onClose }) {
@@ -51,9 +104,11 @@ function ReviewModal({ reviews, onReview, onClose }) {
         <div className="space-y-4">
           {reviews.map((review, idx) => (
             <div key={idx} className="bg-white/5 border border-white/10 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-2xl">{review.playerName}</span>
-                <span className="text-lg font-bold text-gray-300">{review.playerName}</span>
+              <div className="flex items-center gap-3 mb-3">
+                {review.playerEmoji?.startsWith('/team-icons/')
+                  ? <img src={review.playerEmoji} alt="" className="w-10 h-10 object-contain" />
+                  : <span className="text-3xl">{review.playerEmoji || '😀'}</span>}
+                <span className="text-xl font-bold">{review.playerName}</span>
               </div>
               
               {review.flaggedAnswers.map((answer, ansIdx) => (
@@ -176,7 +231,7 @@ function LobbyScreen({ pin, players, onStart, quizTitle }) {
   );
 }
 
-function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause, pendingReviewsCount, onOpenReviews }) {
+function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, onPrevious, onSkipNext, timeLeft, musicEnabled, onToggleMusic, isPaused, onTogglePause, pendingReviewsCount, onOpenReviews, pin, players, playersLookingAway }) {
   // (info slide & question screens both receive onPrevious)
   const [lightboxImage, setLightboxImage] = useState(null);
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
@@ -223,18 +278,18 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
             </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 flex flex-col items-center justify-center">
+          {/* Content - image first, then text below */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-8">
             {question.imageUrl && (
-              <div className="relative mb-8">
+              <div className="relative flex-shrink-0">
                 <img
                   src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
                   alt="Info slide"
-                  className={`max-h-[40rem] rounded-2xl object-contain transition-all duration-1000 ease-in-out ${question.animated ? 'animate-pulse scale-105 brightness-110' : ''}`}
+                  className={`max-h-[50vh] md:max-h-[40rem] max-w-full rounded-2xl object-contain transition-all duration-1000 ease-in-out ${question.animated ? 'animate-breathing' : ''}`}
                 />
               </div>
             )}
-            <h2 className={`text-3xl md:text-5xl font-bold text-center mb-8 max-w-4xl leading-tight ${question.animated ? 'animate-pulse' : ''}`}>
+            <h2 className={`text-2xl md:text-5xl font-bold text-center max-w-4xl leading-tight px-4 ${question.animated ? 'animate-pulse' : ''}`}>
               {question.questionText}
             </h2>
           </div>
@@ -272,6 +327,16 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
           <span className="text-gray-400 font-medium">
             Slide {question.questionNumber} / {question.totalQuestions}
           </span>
+          {question.roundTitle && (
+            <span className="px-3 py-1 bg-primary-600/30 text-primary-300 rounded-full text-sm font-bold">
+              {question.roundTitle}
+            </span>
+          )}
+          {pin && (
+            <span className="px-3 py-1 bg-white/10 text-gray-300 rounded-full text-sm font-bold">
+              PIN: {pin}
+            </span>
+          )}
         </div>
         {isPaused && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-quiz-yellow/90 text-black px-8 py-4 rounded-2xl font-bold text-2xl animate-pulse z-10">
@@ -291,9 +356,35 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
               Ronde {question.roundNumber}
             </span>
           )}
-          <div className="flex items-center gap-2 text-gray-400">
-            <Users className="w-4 h-4" />
-            <span>{answerCount} / {totalPlayers}</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-gray-400">
+              <Users className="w-4 h-4" />
+              <span>{answerCount} / {totalPlayers}</span>
+            </div>
+            {players && players.length > 0 && (
+              <div className="flex items-center gap-1 max-w-md overflow-x-auto">
+                {players.map((player, idx) => {
+                  const isLookingAway = playersLookingAway && playersLookingAway.has(player.name);
+                  return (
+                    <div
+                      key={idx}
+                      className={`relative flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
+                        isLookingAway 
+                          ? 'bg-yellow-600/30 border border-yellow-500/50 animate-pulse' 
+                          : 'bg-white/10 border border-white/20'
+                      }`}
+                      title={isLookingAway ? `${player.name} kijkt weg!` : player.name}
+                    >
+                      {isLookingAway && <Eye className="w-3 h-3 text-yellow-400" />}
+                      {player.emoji?.startsWith('/team-icons/')
+                        ? <img src={player.emoji} alt="" className="w-4 h-4 object-contain" />
+                        : <span className="text-sm">{player.emoji || '😀'}</span>}
+                      <span className="max-w-[60px] truncate">{player.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <button
             onClick={onToggleMusic}
@@ -302,16 +393,6 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
           >
             {musicEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
           </button>
-          {pendingReviewsCount > 0 && (
-            <button
-              onClick={onOpenReviews}
-              className="relative px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full font-bold flex items-center gap-2 animate-pulse"
-              title="Antwoorden beoordelen"
-            >
-              <AlertCircle className="w-5 h-5" />
-              {pendingReviewsCount}
-            </button>
-          )}
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-lg ${isPaused ? 'bg-quiz-yellow text-black' : (timeLeft <= 5 ? 'bg-quiz-red/20 text-quiz-red animate-pulse' : 'bg-white/10')}`}>
             <Clock className="w-5 h-5" />
             {isPaused ? 'PAUSED' : `${timeLeft}s`}
@@ -401,7 +482,7 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
   );
 }
 
-function ResultsScreen({ results, onShowLeaderboard }) {
+function ResultsScreen({ results, onShowLeaderboard, pendingReviews = [], onOpenReviews, onToggleAnswer }) {
   const optionColors = ['bg-quiz-red', 'bg-quiz-blue', 'bg-quiz-green', 'bg-quiz-yellow'];
   const optionShapes = ['△', '◇', '○', '□'];
   const optionShapesCustom = [
@@ -426,31 +507,65 @@ function ResultsScreen({ results, onShowLeaderboard }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
       <h2 className="text-3xl font-bold mb-2">{results.questionText}</h2>
-      <p className="text-gray-400 mb-8">
-        {results.correctCount} / {results.totalPlayers} correct
-      </p>
+      <div className="flex items-center gap-4 mb-8">
+        <p className="text-gray-400">
+          {results.correctCount} / {results.totalPlayers} correct
+        </p>
+        {pendingReviews.length > 0 && onOpenReviews && (
+          <button
+            onClick={onOpenReviews}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-bold flex items-center gap-2 animate-pulse"
+          >
+            <AlertCircle className="w-5 h-5" />
+            {pendingReviews.length} te beoordelen
+          </button>
+        )}
+      </div>
 
       {results.type === 'multiple_choice' && (
-        <div className="w-full max-w-3xl space-y-3 mb-8">
-          {results.options?.map((opt, i) => {
-            const isCorrect = results.correctAnswer === i;
-            const count = results.distribution?.[i] || 0;
+        <>
+          <div className="w-full max-w-3xl space-y-3 mb-8">
+            {results.options?.map((opt, i) => {
+              const isCorrect = results.correctAnswer === i;
+              const count = results.distribution?.[i] || 0;
 
-            return (
-              <div key={i}>
-                <div className={`flex items-center gap-4 p-4 rounded-xl border-2 ${isCorrect ? 'border-quiz-green bg-quiz-green/10' : 'border-white/10 bg-white/5'}`}>
-                  <div className={`w-16 h-16 rounded flex items-center justify-center flex-shrink-0 ${optionColors[i]}`}>
-                    {optionShapesCustom[i]}
+              return (
+                <div key={i}>
+                  <div className={`flex items-center gap-4 p-4 rounded-xl border-2 ${isCorrect ? 'border-quiz-green bg-quiz-green/10' : 'border-white/10 bg-white/5'}`}>
+                    <div className={`w-16 h-16 rounded flex items-center justify-center flex-shrink-0 ${optionColors[i]}`}>
+                      {optionShapesCustom[i]}
+                    </div>
+                    {isCorrect && <CheckCircle className="w-6 h-6 text-quiz-green flex-shrink-0" />}
+                    {!isCorrect && <X className="w-6 h-6 text-gray-500 flex-shrink-0" />}
+                    <span className="flex-1 font-medium">{opt}</span>
+                    <span className="font-bold text-lg">{count}</span>
                   </div>
-                  {isCorrect && <CheckCircle className="w-6 h-6 text-quiz-green flex-shrink-0" />}
-                  {!isCorrect && <X className="w-6 h-6 text-gray-500 flex-shrink-0" />}
-                  <span className="flex-1 font-medium">{opt}</span>
-                  <span className="font-bold text-lg">{count}</span>
                 </div>
+              );
+            })}
+          </div>
+          
+          {/* Player list with correct/incorrect */}
+          <div className="w-full max-w-3xl space-y-2 mb-8">
+            <h3 className="text-lg font-bold text-gray-400 mb-3">Spelers</h3>
+            {results.answers?.map((a, i) => (
+              <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${a.isCorrect ? 'bg-quiz-green/10 border border-quiz-green/30' : 'bg-white/5 border border-white/10'}`}>
+                {a.isCorrect ? (
+                  <CheckCircle className="w-5 h-5 text-quiz-green flex-shrink-0" />
+                ) : (
+                  <X className="w-5 h-5 text-quiz-red flex-shrink-0" />
+                )}
+                {a.emoji?.startsWith('/team-icons/')
+                  ? <img src={a.emoji} alt="" className="w-7 h-7 object-contain" />
+                  : <span className="text-xl">{a.emoji || '😀'}</span>}
+                <span className="font-bold flex-1">{a.playerName}</span>
+                {a.points > 0 && (
+                  <span className="text-quiz-green font-bold">+{a.points}</span>
+                )}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {results.type === 'free_type' && (
@@ -468,6 +583,9 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                 ? results.correctAnswer.map(ans => ans.toLowerCase().trim())
                 : [String(results.correctAnswer).toLowerCase().trim()];
               
+              // Find pending review for this player
+              const playerReview = pendingReviews.find(r => r.playerId === a.playerId);
+              
               return (
                 <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
                   <div className="flex items-center gap-3 mb-2">
@@ -483,6 +601,12 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                       ? <img src={a.emoji} alt="" className="w-7 h-7 object-contain" />
                       : <span className="text-xl">{a.emoji || '😀'}</span>}
                     <span className="font-bold">{a.playerName}</span>
+                    {playerReview && (
+                      <span className="px-2 py-0.5 bg-yellow-600/30 text-yellow-300 rounded-full text-xs font-bold flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Review nodig
+                      </span>
+                    )}
                     {a.points > 0 && (
                       <span className={`ml-auto font-bold ${a.isCorrect ? 'text-quiz-green' : 'text-quiz-yellow'}`}>
                         +{a.points}
@@ -497,37 +621,43 @@ function ResultsScreen({ results, onShowLeaderboard }) {
                         const trimmedAns = ans.trim();
                         // Use server-provided matched details if available
                         const matched = a.answerDetails?.matched || [];
-                        const isCorrectAnswer = matched.some(m => m.toLowerCase().trim() === trimmedAns.toLowerCase()) ||
-                                               correctAnswers.includes(trimmedAns.toLowerCase());
+                        const isCorrectAnswer = matched.some(m => m.toLowerCase().trim() === trimmedAns.toLowerCase());
+                        // Check if this answer needs review (in flagged answers)
+                        const needsReview = playerReview?.flaggedAnswers?.some(
+                          f => f.playerAnswer.toLowerCase().trim() === trimmedAns.toLowerCase()
+                        );
+                        
                         return (
-                          <div key={idx} className="flex items-center gap-2 text-sm group">
+                          <div key={idx} className={`flex items-center gap-2 text-sm rounded-lg p-2 ${needsReview ? 'bg-yellow-600/10 border border-yellow-600/30' : ''}`}>
                             {isCorrectAnswer ? (
                               <CheckCircle className="w-4 h-4 text-quiz-green flex-shrink-0" />
+                            ) : needsReview ? (
+                              <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
                             ) : (
                               <X className="w-4 h-4 text-quiz-red flex-shrink-0" />
                             )}
-                            <span className={`flex-1 ${isCorrectAnswer ? 'text-quiz-green' : 'text-gray-400'}`}>
+                            <span className={`flex-1 ${isCorrectAnswer ? 'text-quiz-green' : needsReview ? 'text-yellow-300' : 'text-gray-400'}`}>
                               {trimmedAns}
+                              {needsReview && (
+                                <span className="ml-2 text-xs text-yellow-500">
+                                  (lijkt op "{playerReview.flaggedAnswers.find(f => f.playerAnswer.toLowerCase().trim() === trimmedAns.toLowerCase())?.expectedAnswer}")
+                                </span>
+                              )}
                             </span>
-                            {/* Manual correction buttons */}
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              {!isCorrectAnswer && (
-                                <button
-                                  className="px-2 py-1 bg-quiz-green/20 hover:bg-quiz-green/30 text-quiz-green rounded text-xs font-bold"
-                                  title="Markeer als correct"
-                                >
-                                  ✓ Correct
-                                </button>
-                              )}
-                              {isCorrectAnswer && (
-                                <button
-                                  className="px-2 py-1 bg-quiz-red/20 hover:bg-quiz-red/30 text-quiz-red rounded text-xs font-bold"
-                                  title="Markeer als fout"
-                                >
-                                  ✗ Fout
-                                </button>
-                              )}
-                            </div>
+                            {/* Manual correction toggle button */}
+                            {onToggleAnswer && (
+                              <button
+                                onClick={() => onToggleAnswer(a.playerId, trimmedAns, !isCorrectAnswer)}
+                                className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                                  isCorrectAnswer 
+                                    ? 'bg-quiz-red/20 hover:bg-quiz-red/40 text-quiz-red' 
+                                    : 'bg-quiz-green/20 hover:bg-quiz-green/40 text-quiz-green'
+                                }`}
+                                title={isCorrectAnswer ? 'Markeer als fout' : 'Markeer als correct'}
+                              >
+                                {isCorrectAnswer ? '✗ Markeer fout' : '✓ Markeer correct'}
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -551,6 +681,210 @@ function ResultsScreen({ results, onShowLeaderboard }) {
   );
 }
 
+function BatchResultsScreen({ batchResults, onShowLeaderboard, onToggleAnswer }) {
+  const API_BASE = import.meta.env.VITE_API_URL || '';
+  
+  // Calculate total points for this round
+  const totalRoundPoints = batchResults.results.reduce((sum, result) => {
+    const questionPoints = result.answers?.reduce((qSum, a) => qSum + (a.points || 0), 0) || 0;
+    return sum + questionPoints;
+  }, 0);
+  
+  const totalCorrect = batchResults.results.reduce((sum, result) => sum + (result.correctCount || 0), 0);
+  const totalQuestions = batchResults.results.length * (batchResults.results[0]?.totalPlayers || 0);
+  
+  // Collect all pending reviews from all questions in this batch
+  const allPendingReviews = batchResults.pendingReviews || [];
+  
+  return (
+    <div className="min-h-screen flex flex-col items-center p-6 md:p-10 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
+      <div className="w-full max-w-5xl">
+        <div className="text-center mb-8">
+          <h2 className="text-4xl font-black mb-2">{batchResults.roundTitle}</h2>
+          <div className="flex items-center justify-center gap-6 text-lg mb-4">
+            <p className="text-gray-400">
+              {totalCorrect} / {totalQuestions} correct
+            </p>
+            <div className="flex items-center gap-2 text-quiz-yellow">
+              <Zap className="w-5 h-5" />
+              <span className="font-bold">{totalRoundPoints} punten</span>
+            </div>
+          </div>
+          {allPendingReviews.length > 0 && (
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600/30 text-yellow-300 rounded-lg text-sm font-bold">
+              <AlertCircle className="w-4 h-4" />
+              {allPendingReviews.length} antwoord{allPendingReviews.length !== 1 ? 'en' : ''} te beoordelen
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-8 mb-8">
+          {batchResults.results.map((result, idx) => (
+            <div key={idx} className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold">Vraag {result.questionNumber}: {result.questionText}</h3>
+                <div className="text-sm text-gray-400">
+                  {result.correctCount} / {result.totalPlayers} correct
+                </div>
+              </div>
+
+              {/* Correct answer display - same style as ResultsScreen */}
+              <div className="bg-quiz-green/20 border-2 border-quiz-green/40 rounded-2xl p-6 mb-6 text-center">
+                <p className="text-gray-300 text-xs mb-2 uppercase tracking-wide">Correcte antwoorden</p>
+                <p className="text-quiz-green font-black text-2xl">
+                  {Array.isArray(result.correctAnswer) 
+                    ? result.correctAnswer.join(', ') 
+                    : result.options?.[result.correctAnswer] ?? result.correctAnswer}
+                </p>
+              </div>
+
+              {/* Player answers - match ResultsScreen styling */}
+              {result.type === 'free_type' ? (
+                <div className="space-y-3">
+                  {result.answers?.map((a, i) => {
+                    const isPartial = !a.isCorrect && a.points > 0;
+                    const hasAnswered = a.answer !== null && a.answer !== undefined;
+                    const isTeamIcon = a.emoji?.startsWith('/team-icons/');
+                    
+                    // Find pending review for this player in this question
+                    const playerReview = allPendingReviews.find(
+                      r => r.playerId === a.playerId && r.questionIndex === result.questionIndex
+                    );
+                    
+                    return (
+                      <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          {a.isCorrect ? (
+                            <CheckCircle className="w-5 h-5 text-quiz-green" />
+                          ) : isPartial ? (
+                            <Zap className="w-5 h-5 text-quiz-yellow" />
+                          ) : (
+                            <X className="w-5 h-5 text-quiz-red" />
+                          )}
+                          {isTeamIcon ? (
+                            <img src={`${API_BASE}${a.emoji}`} alt="team" className="w-7 h-7 object-contain" />
+                          ) : (
+                            <span className="text-xl">{a.emoji || '😀'}</span>
+                          )}
+                          <span className="font-bold">{a.playerName}</span>
+                          {playerReview && (
+                            <span className="px-2 py-0.5 bg-yellow-600/30 text-yellow-300 rounded-full text-xs font-bold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Review nodig
+                            </span>
+                          )}
+                          {a.points > 0 && (
+                            <span className={`ml-auto font-bold ${a.isCorrect ? 'text-quiz-green' : 'text-quiz-yellow'}`}>
+                              +{a.points}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Individual answers breakdown - match ResultsScreen */}
+                        {hasAnswered && a.answer && (
+                          <div className="ml-8 space-y-2">
+                            {String(a.answer).split(',').map((ans, ansIdx) => {
+                              const trimmedAns = ans.trim();
+                              const matched = a.answerDetails?.matched || [];
+                              const isCorrectAnswer = matched.some(m => m.toLowerCase().trim() === trimmedAns.toLowerCase());
+                              
+                              // Check if this specific answer needs review
+                              const needsReview = playerReview?.flaggedAnswers?.some(
+                                f => f.playerAnswer.toLowerCase().trim() === trimmedAns.toLowerCase()
+                              );
+                              
+                              return (
+                                <div key={ansIdx} className={`flex items-center gap-2 text-sm rounded-lg p-2 ${needsReview ? 'bg-yellow-600/10 border border-yellow-600/30' : ''}`}>
+                                  {isCorrectAnswer ? (
+                                    <CheckCircle className="w-4 h-4 text-quiz-green flex-shrink-0" />
+                                  ) : needsReview ? (
+                                    <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                                  ) : (
+                                    <X className="w-4 h-4 text-quiz-red flex-shrink-0" />
+                                  )}
+                                  <span className={`flex-1 ${isCorrectAnswer ? 'text-quiz-green' : needsReview ? 'text-yellow-300' : 'text-gray-400'}`}>
+                                    {trimmedAns}
+                                    {needsReview && (
+                                      <span className="ml-2 text-xs text-yellow-500">
+                                        (lijkt op "{playerReview.flaggedAnswers.find(f => f.playerAnswer.toLowerCase().trim() === trimmedAns.toLowerCase())?.expectedAnswer}")
+                                      </span>
+                                    )}
+                                  </span>
+                                  {/* Manual correction toggle - same as ResultsScreen */}
+                                  {onToggleAnswer && (
+                                    <button
+                                      onClick={() => onToggleAnswer(a.playerId, trimmedAns, !isCorrectAnswer, result.questionIndex)}
+                                      className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                                        isCorrectAnswer 
+                                          ? 'bg-quiz-red/20 hover:bg-quiz-red/40 text-quiz-red' 
+                                          : 'bg-quiz-green/20 hover:bg-quiz-green/40 text-quiz-green'
+                                      }`}
+                                      title={isCorrectAnswer ? 'Markeer als fout' : 'Markeer als correct'}
+                                    >
+                                      {isCorrectAnswer ? '✗ Markeer fout' : '✓ Markeer correct'}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {!hasAnswered && (
+                          <div className="ml-8 text-sm text-gray-500 italic">Geen antwoord</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <h4 className="text-lg font-bold text-gray-400 mb-3">Spelers</h4>
+                  {result.answers?.map((a, i) => {
+                    const isTeamIcon = a.emoji?.startsWith('/team-icons/');
+                    return (
+                      <div 
+                        key={i} 
+                        className={`flex items-center gap-3 p-3 rounded-xl ${
+                          a.isCorrect ? 'bg-quiz-green/10 border border-quiz-green/30' : 'bg-white/5 border border-white/10'
+                        }`}
+                      >
+                        {a.isCorrect ? (
+                          <CheckCircle className="w-5 h-5 text-quiz-green flex-shrink-0" />
+                        ) : (
+                          <X className="w-5 h-5 text-quiz-red flex-shrink-0" />
+                        )}
+                        {isTeamIcon ? (
+                          <img src={`${API_BASE}${a.emoji}`} alt="team" className="w-7 h-7 object-contain" />
+                        ) : (
+                          <span className="text-xl">{a.emoji || '😀'}</span>
+                        )}
+                        <span className="font-bold flex-1">{a.playerName}</span>
+                        {a.points > 0 && (
+                          <span className="text-quiz-green font-bold">+{a.points}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-center">
+          <button
+            onClick={onShowLeaderboard}
+            className="px-8 py-4 bg-primary-600 hover:bg-primary-700 rounded-2xl text-xl font-bold transition-colors flex items-center gap-3"
+          >
+            <SkipForward className="w-6 h-6" />
+            Volgende
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LeaderboardScreen({ leaderboard, onNext, onPrevious, isLast }) {
   const medals = ['🥇', '🥈', '🥉'];
 
@@ -565,23 +899,28 @@ function LeaderboardScreen({ leaderboard, onNext, onPrevious, isLast }) {
       {/* Podium visualization */}
       {top3.length > 0 && (
         <div className="flex items-end justify-center gap-4 mb-6 w-full max-w-2xl">
-          {top3.map((player, idx) => {
-            const place = idx === 0 ? 1 : idx === 1 ? 2 : 3;
-            const heights = ['h-40', 'h-32', 'h-24'];
-            const colors = ['bg-quiz-yellow/20 border-quiz-yellow/40', 'bg-gray-300/20 border-gray-300/30', 'bg-orange-400/20 border-orange-400/30'];
+          {/* Render in podium order: 2nd, 1st, 3rd */}
+          {[top3[1], top3[0], top3[2]].filter(Boolean).map((player) => {
+            const realIdx = top3.indexOf(player);
+            const podiumStyle = realIdx === 0 
+              ? { height: 'h-44', color: 'bg-quiz-yellow/20 border-quiz-yellow/50', textColor: 'text-quiz-yellow' }
+              : realIdx === 1
+              ? { height: 'h-32', color: 'bg-gray-300/20 border-gray-300/40', textColor: 'text-gray-200' }
+              : { height: 'h-24', color: 'bg-orange-400/20 border-orange-400/40', textColor: 'text-orange-300' };
             const medals = ['🥇', '🥈', '🥉'];
-            const widths = ['w-28', 'w-24', 'w-24'];
-            const emojiSizes = ['text-4xl', 'text-3xl', 'text-3xl'];
 
             return (
-              <div key={player.id} className="flex flex-col items-center">
-                {player.emoji?.startsWith('/team-icons/')
-                  ? <img src={player.emoji} alt="" className={`w-${idx === 0 ? 14 : 12} h-${idx === 0 ? 14 : 12} object-contain mb-2`} />
-                  : <span className={`${emojiSizes[idx]} mb-2`}>{player.emoji || '😀'}</span>}
-                <span className={idx === 0 ? 'text-quiz-yellow font-bold mb-2' : 'text-gray-300 font-bold mb-2'}>{player.name}</span>
-                <div className={`${widths[idx]} ${heights[idx]} ${colors[idx]} border-2 rounded-t-2xl flex flex-col items-center justify-center`}>
-                  <span className="text-2xl mb-1">{medals[idx]}</span>
-                  <span className="font-black text-lg">{player.score.toLocaleString()}</span>
+              <div key={player.id} className="flex flex-col items-center w-32">
+                {/* Equal-sized icons */}
+                <div className="w-16 h-16 flex items-center justify-center mb-2">
+                  {player.emoji?.startsWith('/team-icons/')
+                    ? <img src={player.emoji} alt="" className="w-16 h-16 object-contain" />
+                    : <span className="text-5xl">{player.emoji || '😀'}</span>}
+                </div>
+                <span className={`${podiumStyle.textColor} font-bold mb-2 text-center truncate w-full`}>{player.name}</span>
+                <div className={`w-full ${podiumStyle.height} ${podiumStyle.color} border-2 rounded-t-2xl flex flex-col items-center justify-center`}>
+                  <span className="text-3xl mb-1">{medals[realIdx]}</span>
+                  <span className="font-black text-xl">{player.score.toLocaleString()}</span>
                 </div>
               </div>
             );
@@ -703,6 +1042,11 @@ export default function HostGame() {
   const [isPaused, setIsPaused] = useState(false);
   const [pendingReviews, setPendingReviews] = useState([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [batchResults, setBatchResults] = useState(null);
+  const [quizData, setQuizData] = useState(null); // Full quiz for round navigation
+  const [previewMode, setPreviewMode] = useState(false); // True if started without players
+  const [antiCheatAlert, setAntiCheatAlert] = useState(null); // { playerName, type }
+  const [playersLookingAway, setPlayersLookingAway] = useState(new Set()); // Set of player names looking away
   const audioRef = useRef(null);
 
   // Initialize audio once
@@ -776,6 +1120,48 @@ export default function HostGame() {
       setGameState('results');
     });
 
+    socket.on('game:results-updated', (r) => {
+      setResults(r);
+    });
+
+    socket.on('game:batch-results', (br) => {
+      setBatchResults(br);
+      setGameState('batch-results');
+    });
+
+    socket.on('game:batch-results-updated', (br) => {
+      setBatchResults(br);
+    });
+
+    // Anti-cheat alerts
+    socket.on('game:player-tab-hidden', ({ playerName }) => {
+      setAntiCheatAlert({ playerName, type: 'tab-hidden' });
+      setPlayersLookingAway(prev => new Set(prev).add(playerName));
+      setTimeout(() => setAntiCheatAlert(null), 3000);
+    });
+
+    socket.on('game:player-tab-visible', ({ playerName }) => {
+      setPlayersLookingAway(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(playerName);
+        return newSet;
+      });
+    });
+
+    socket.on('game:player-window-blur', ({ playerName }) => {
+      setAntiCheatAlert({ playerName, type: 'window-blur' });
+      setPlayersLookingAway(prev => new Set(prev).add(playerName));
+      setTimeout(() => setAntiCheatAlert(null), 3000);
+    });
+
+    socket.on('game:player-window-focus', ({ playerName }) => {
+      setPlayersLookingAway(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(playerName);
+        return newSet;
+      });
+    });
+
     return () => {
       socket.off('game:player-joined');
       socket.off('game:player-left');
@@ -783,6 +1169,13 @@ export default function HostGame() {
       socket.off('game:pending-reviews');
       socket.off('game:score-updated');
       socket.off('game:question-results');
+      socket.off('game:results-updated');
+      socket.off('game:batch-results');
+      socket.off('game:batch-results-updated');
+      socket.off('game:player-tab-hidden');
+      socket.off('game:player-tab-visible');
+      socket.off('game:player-window-blur');
+      socket.off('game:player-window-focus');
     };
   }, [socket]);
 
@@ -801,9 +1194,36 @@ export default function HostGame() {
       setTotalQuestions(response.totalQuestions);
       setGameState('lobby');
     });
+
+    // Also fetch full quiz data for round navigation
+    const API_BASE = import.meta.env.VITE_API_URL || '';
+    fetch(`${API_BASE}/api/quizzes/${id}`)
+      .then(r => r.json())
+      .then(data => setQuizData(data))
+      .catch(() => {});
   }, [socket, connected, id, navigate]);
 
+  const jumpToQuestion = useCallback((questionIndex) => {
+    if (!socket) return;
+    socket.emit('host:jump-to-question', { questionIndex }, (response) => {
+      if (response.error) {
+        alert(response.error);
+        return;
+      }
+      if (response.state === 'question') {
+        setCurrentQuestion(response.question);
+        setCurrentQuestionNum(response.question.questionNumber);
+        setGameState('question');
+      } else if (response.state === 'leaderboard') {
+        setLeaderboard(response.leaderboard);
+        setGameState('leaderboard');
+      }
+    });
+  }, [socket]);
+
   const startGame = useCallback(() => {
+    // Detect preview mode (no players)
+    if (players.length === 0) setPreviewMode(true);
     socket.emit('host:start', (response) => {
       if (response.state === 'question') {
         setCurrentQuestion(response.question);
@@ -818,7 +1238,7 @@ export default function HostGame() {
         setGameState('finished');
       }
     });
-  }, [socket]);
+  }, [socket, players.length]);
 
   const showLeaderboard = useCallback(() => {
     socket.emit('host:show-leaderboard', ({ leaderboard: lb }) => {
@@ -859,6 +1279,46 @@ export default function HostGame() {
       }
     });
   }, [socket]);
+
+  const handleToggleAnswer = useCallback((playerId, answerText, markCorrect, questionIndex = null) => {
+    socket.emit('host:toggle-answer', { playerId, answerText, markCorrect, questionIndex }, (response) => {
+      if (response.error) {
+        console.error('Toggle error:', response.error);
+        return;
+      }
+      // If in batch-results state, manually update the batch results
+      if (questionIndex !== null && batchResults) {
+        setBatchResults(prev => {
+          const updated = { ...prev };
+          updated.results = prev.results.map(result => {
+            if (result.questionIndex === questionIndex) {
+              // Update the specific answer
+              const updatedAnswers = result.answers.map(a => {
+                if (a.playerId === playerId) {
+                  return {
+                    ...a,
+                    points: response.points,
+                    isCorrect: response.isCorrect,
+                    answerDetails: {
+                      matched: response.matched || [],
+                      unmatched: response.unmatched || []
+                    }
+                  };
+                }
+                return a;
+              });
+              // Recalculate correctCount
+              const correctCount = updatedAnswers.filter(a => a.isCorrect).length;
+              return { ...result, answers: updatedAnswers, correctCount };
+            }
+            return result;
+          });
+          return updated;
+        });
+      }
+      // Results will be updated via socket event for normal results screen
+    });
+  }, [socket, batchResults]);
 
   const handleReview = useCallback((playerId, answerIndex, approved) => {
     socket.emit('host:review-answer', { playerId, answerIndex, approved }, (response) => {
@@ -902,8 +1362,16 @@ export default function HostGame() {
     console.log('[DEBUG Host] Emitting host:show-results');
     socket.emit('host:show-results', (r) => {
       console.log('[DEBUG Host] Received results response:', r);
-      setResults(r);
-      setGameState('results');
+      // Server returns different types:
+      // - 'results': normal flow, show results screen
+      // - 'auto-next': delayed results, server auto-advances to next question (do nothing here)
+      // - 'batch-results': delayed results last question, server emits batch-results event
+      if (r?.type === 'results' && r.results) {
+        setResults(r.results);
+        setGameState('results');
+      }
+      // For 'auto-next' and 'batch-results', the server emits proper events
+      // that are handled by the existing socket.on listeners
     });
   }, [socket, currentQuestion, nextQuestion, showLeaderboard]);
 
@@ -931,9 +1399,18 @@ export default function HostGame() {
     return <LobbyScreen pin={pin} players={players} onStart={startGame} quizTitle={quizTitle} />;
   }
 
+  const navBar = previewMode ? <RoundNavBar quizData={quizData} currentQuestion={currentQuestion} onJump={jumpToQuestion} /> : null;
+
   if (gameState === 'question') {
     return (
       <>
+        {antiCheatAlert && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-yellow-600/90 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-3 animate-bounce-in shadow-lg">
+            <Eye className="w-5 h-5" />
+            <span>{antiCheatAlert.playerName} kijkt even weg... 👀</span>
+          </div>
+        )}
+        {navBar}
         <QuestionScreen
           question={currentQuestion}
           answerCount={answerCount}
@@ -948,6 +1425,9 @@ export default function HostGame() {
           onTogglePause={togglePause}
           pendingReviewsCount={pendingReviews.length}
           onOpenReviews={() => setShowReviewModal(true)}
+          pin={pin}
+          players={players}
+          playersLookingAway={playersLookingAway}
         />
         {showReviewModal && (
           <ReviewModal
@@ -961,22 +1441,84 @@ export default function HostGame() {
   }
 
   if (gameState === 'results') {
-    return <ResultsScreen results={results} onShowLeaderboard={nextQuestion} />;
+    return (
+      <>
+        {antiCheatAlert && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-yellow-600/90 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-3 animate-bounce-in shadow-lg">
+            <Eye className="w-5 h-5" />
+            <span>{antiCheatAlert.playerName} kijkt even weg... 👀</span>
+          </div>
+        )}
+        {navBar}
+        <ResultsScreen 
+          results={results} 
+          onShowLeaderboard={nextQuestion}
+          pendingReviews={pendingReviews}
+          onOpenReviews={() => setShowReviewModal(true)}
+          onToggleAnswer={handleToggleAnswer}
+        />
+        {showReviewModal && (
+          <ReviewModal
+            reviews={pendingReviews}
+            onReview={handleReview}
+            onClose={() => setShowReviewModal(false)}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (gameState === 'batch-results') {
+    return (
+      <>
+        {antiCheatAlert && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-yellow-600/90 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-3 animate-bounce-in shadow-lg">
+            <Eye className="w-5 h-5" />
+            <span>{antiCheatAlert.playerName} kijkt even weg... 👀</span>
+          </div>
+        )}
+        {navBar}
+        <BatchResultsScreen 
+          batchResults={batchResults}
+          onShowLeaderboard={nextQuestion}
+          onToggleAnswer={handleToggleAnswer}
+        />
+      </>
+    );
   }
 
   if (gameState === 'leaderboard') {
     return (
-      <LeaderboardScreen
-        leaderboard={leaderboard}
-        onNext={nextQuestion}
-        onPrevious={previousQuestion}
-        isLast={currentQuestionNum >= totalQuestions}
-      />
+      <>
+        {antiCheatAlert && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-yellow-600/90 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-3 animate-bounce-in shadow-lg">
+            <Eye className="w-5 h-5" />
+            <span>{antiCheatAlert.playerName} kijkt even weg... 👀</span>
+          </div>
+        )}
+        {navBar}
+        <LeaderboardScreen
+          leaderboard={leaderboard}
+          onNext={nextQuestion}
+          onPrevious={previousQuestion}
+          isLast={currentQuestionNum >= totalQuestions}
+        />
+      </>
     );
   }
 
   if (gameState === 'finished') {
-    return <FinishedScreen leaderboard={leaderboard} />;
+    return (
+      <>
+        {antiCheatAlert && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-yellow-600/90 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-3 animate-bounce-in shadow-lg">
+            <Eye className="w-5 h-5" />
+            <span>{antiCheatAlert.playerName} kijkt even weg... 👀</span>
+          </div>
+        )}
+        <FinishedScreen leaderboard={leaderboard} />
+      </>
+    );
   }
 
   return null;

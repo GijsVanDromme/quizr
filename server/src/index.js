@@ -39,23 +39,105 @@ app.get('*', (req, res) => {
 
 const gameManager = new GameManager();
 
+// Helper: handle results flow (respects delayed results)
+function handleShowResults(session, hostSocketId) {
+  if (session.timer) clearTimeout(session.timer);
+  
+  const currentQ = session.quiz.questions[session.currentQuestionIndex];
+  const roundNumber = currentQ?.roundNumber;
+  const shouldDelay = session.shouldDelayResults(roundNumber);
+  const isLastInRound = session.isLastQuestionInRound(session.currentQuestionIndex);
+
+  console.log('[DEBUG] handleShowResults - Round:', roundNumber, 'shouldDelay:', shouldDelay, 'isLastInRound:', isLastInRound);
+
+  const results = session.getQuestionResults();
+
+  if (shouldDelay) {
+    session.delayedResults.push({
+      questionIndex: session.currentQuestionIndex,
+      results: results
+    });
+
+    if (isLastInRound) {
+      // Last question in round - show batch results to everyone
+      session.state = 'batch-results';
+      const batchResults = {
+        type: 'batch-results',
+        roundNumber: roundNumber,
+        roundTitle: session.quiz.roundTitles?.[roundNumber] || `Ronde ${roundNumber}`,
+        results: session.delayedResults.map(dr => dr.results),
+        pendingReviews: session.pendingReviews || []
+      };
+      session.delayedResults = [];
+      console.log('[DEBUG] Last question in delayed round - showing batch results');
+      io.to(`game:${session.pin}`).emit('game:batch-results', batchResults);
+      return { type: 'batch-results', batchResults };
+    } else {
+      // Not last question - skip results and go directly to next question
+      console.log('[DEBUG] Delayed results - skipping to next question automatically');
+      const nextState = session.nextQuestion();
+      
+      if (nextState.state === 'question') {
+        io.to(`game:${session.pin}`).emit('game:question', nextState.question);
+        // Set timer for new question if not info_slide
+        if (nextState.question.type !== 'info_slide') {
+          const timeLimit = (nextState.question.timeLimit || 20) * 1000;
+          session.timer = setTimeout(() => {
+            if (session.state === 'question' && !session.paused) {
+              handleShowResults(session, hostSocketId);
+            }
+          }, timeLimit + 1000);
+        }
+      } else if (nextState.state === 'leaderboard') {
+        io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard: nextState.leaderboard });
+      } else if (nextState.state === 'finished') {
+        io.to(`game:${session.pin}`).emit('game:finished', { leaderboard: nextState.leaderboard });
+      }
+      
+      return { type: 'auto-next', nextState };
+    }
+  } else {
+    session.state = 'results';
+    console.log('[DEBUG] Emitting game:question-results to room game:' + session.pin);
+    io.to(`game:${session.pin}`).emit('game:question-results', results);
+    return { type: 'results', results };
+  }
+}
+
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
   // HOST: Create game session
   socket.on('host:create', async ({ quizId }, callback) => {
-    const quiz = await getQuiz(quizId);
-    if (!quiz) return callback({ error: 'Quiz not found' });
+    console.log('[DEBUG] host:create for quizId:', quizId);
+    try {
+      const { getQuiz } = await import('./database.js');
+      const quiz = await getQuiz(quizId);
+      if (!quiz) {
+        console.log('[DEBUG] Quiz not found');
+        return callback({ error: 'Quiz not found' });
+      }
+      console.log('[DEBUG] Quiz loaded:', quiz.title, 'questions:', quiz.questions?.length);
+      console.log('[DEBUG] round_settings from DB:', JSON.stringify(quiz.round_settings));
+      console.log('[DEBUG] roundSettings from DB:', JSON.stringify(quiz.roundSettings));
+      console.log('[DEBUG] ALL question roundNumbers:');
+      quiz.questions?.forEach((q, i) => {
+        console.log(`  Q${i+1}: "${q.questionText?.substring(0, 40)}" - Round: ${q.roundNumber}, Type: ${q.type}`);
+      });
+      const session = gameManager.createSession(quiz, socket.id);
+      socket.join(`game:${session.pin}`);
+      console.log(`[Game] Created session ${session.pin} for quiz "${quiz.title}"`);
 
-    const session = gameManager.createSession(quiz, socket.id);
-    socket.join(`game:${session.pin}`);
-    console.log(`[Game] Created session ${session.pin} for quiz "${quiz.title}"`);
-
-    callback({
-      pin: session.pin,
-      quizTitle: quiz.title,
-      totalQuestions: quiz.questions.length,
-    });
+      callback({
+        pin: session.pin,
+        quizId: quizId,
+        quizTitle: quiz.title,
+        totalQuestions: quiz.questions.length,
+      });
+    } catch (err) {
+      console.error('[DEBUG] host:create error:', err);
+      callback({ error: err.message });
+    }
   });
 
   // PLAYER: Join game (also handles rejoin mid-game)
@@ -131,9 +213,7 @@ io.on('connection', (socket) => {
         const timeLimit = (result.question.timeLimit || 20) * 1000;
         session.timer = setTimeout(() => {
           if (session.state === 'question' && !session.paused) {
-            session.state = 'results';
-            const results = session.getQuestionResults();
-            io.to(`game:${session.pin}`).emit('game:question-results', results);
+            handleShowResults(session, session.hostSocketId);
           }
         }, timeLimit + 1000);
       }
@@ -157,8 +237,56 @@ io.on('connection', (socket) => {
     console.log('[DEBUG] Session found, pin:', session.pin, 'players in room:', session.players.size);
     if (session.timer) clearTimeout(session.timer);
 
+    // If currently in question state with delayed results, handle results first
+    if (session.state === 'question') {
+      const currentQ = session.quiz.questions[session.currentQuestionIndex];
+      const roundNumber = currentQ?.roundNumber;
+      const shouldDelay = session.shouldDelayResults(roundNumber);
+      const isLastInRound = session.isLastQuestionInRound(session.currentQuestionIndex);
+
+      console.log('[DEBUG] host:next - Round:', roundNumber, 'shouldDelay:', shouldDelay, 'isLastInRound:', isLastInRound);
+
+      if (shouldDelay) {
+        // Store results for delayed display
+        const results = session.getQuestionResults();
+        session.delayedResults.push({
+          questionIndex: session.currentQuestionIndex,
+          results: results
+        });
+
+        if (isLastInRound) {
+          // Last question - show batch results
+          session.state = 'batch-results';
+          const batchResults = {
+            type: 'batch-results',
+            roundNumber: roundNumber,
+            roundTitle: session.quiz.roundTitles?.[roundNumber] || `Ronde ${roundNumber}`,
+            results: session.delayedResults.map(dr => dr.results),
+            pendingReviews: session.pendingReviews || []
+          };
+          session.delayedResults = [];
+          console.log('[DEBUG] host:next - showing batch results for round', roundNumber);
+          io.to(`game:${session.pin}`).emit('game:batch-results', batchResults);
+          return callback({ state: 'batch-results', batchResults });
+        }
+        // Otherwise, continue to next question (results stored)
+      }
+    }
+
     const result = session.nextQuestion();
     console.log('[DEBUG] nextQuestion result:', result.state);
+
+    // Check if the NEXT question is in a delayed results round
+    if (result.state === 'question' && result.question) {
+      const nextRoundNumber = result.question.roundNumber;
+      const nextShouldDelay = session.shouldDelayResults(nextRoundNumber);
+      console.log('[DEBUG] host:next - Next question round:', nextRoundNumber, 'shouldDelay:', nextShouldDelay);
+      
+      if (nextShouldDelay && session.delayedResults.length === 0) {
+        // Entering a delayed results round - start tracking
+        console.log('[DEBUG] host:next - Entering delayed results round', nextRoundNumber);
+      }
+    }
 
     if (result.state === 'question') {
       console.log('[DEBUG] Emitting game:question to room game:' + session.pin);
@@ -170,9 +298,7 @@ io.on('connection', (socket) => {
         const timeLimit = (result.question.timeLimit || 20) * 1000;
         session.timer = setTimeout(() => {
           if (session.state === 'question' && !session.paused) {
-            session.state = 'results';
-            const results = session.getQuestionResults();
-            io.to(`game:${session.pin}`).emit('game:question-results', results);
+            handleShowResults(session, session.hostSocketId);
           }
         }, timeLimit + 1000);
       }
@@ -205,9 +331,7 @@ io.on('connection', (socket) => {
         const timeLimit = (result.question.timeLimit || 20) * 1000;
         session.timer = setTimeout(() => {
           if (session.state === 'question' && !session.paused) {
-            session.state = 'results';
-            const results = session.getQuestionResults();
-            io.to(`game:${session.pin}`).emit('game:question-results', results);
+            handleShowResults(session, session.hostSocketId);
           }
         }, timeLimit + 1000);
       }
@@ -227,14 +351,36 @@ io.on('connection', (socket) => {
       return callback({ error: 'No active session' });
     }
 
-    if (session.timer) clearTimeout(session.timer);
-    session.state = 'results';
+    const result = handleShowResults(session, session.hostSocketId);
+    callback(result);
+  });
 
-    const results = session.getQuestionResults();
-    console.log('[DEBUG] Emitting game:question-results to room game:' + session.pin);
-    console.log('[DEBUG] Results:', results.questionText, 'correct:', results.correctCount);
-    io.to(`game:${session.pin}`).emit('game:question-results', results);
-    callback(results);
+  // HOST: Jump to specific question (debug/preview mode)
+  socket.on('host:jump-to-question', ({ questionIndex }, callback) => {
+    console.log('[DEBUG] host:jump-to-question:', questionIndex);
+    const session = gameManager.getSessionBySocket(socket.id);
+    if (!session) return callback({ error: 'No active session' });
+
+    if (session.timer) clearTimeout(session.timer);
+
+    const result = session.jumpToQuestion(questionIndex);
+    if (result.error) return callback(result);
+
+    if (result.state === 'question') {
+      io.to(`game:${session.pin}`).emit('game:question', result.question);
+      if (result.question.type !== 'info_slide') {
+        const timeLimit = (result.question.timeLimit || 20) * 1000;
+        session.timer = setTimeout(() => {
+          if (session.state === 'question' && !session.paused) {
+            handleShowResults(session, session.hostSocketId);
+          }
+        }, timeLimit + 1000);
+      }
+    } else if (result.state === 'leaderboard') {
+      io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard: result.leaderboard });
+    }
+
+    callback(result);
   });
 
   // HOST: Show leaderboard
@@ -268,9 +414,7 @@ io.on('connection', (socket) => {
         if (remainingTime > 0) {
           session.timer = setTimeout(() => {
             if (session.state === 'question' && !session.paused) {
-              session.state = 'results';
-              const results = session.getQuestionResults();
-              io.to(`game:${session.pin}`).emit('game:question-results', results);
+              handleShowResults(session, session.hostSocketId);
             }
           }, remainingTime);
         }
@@ -289,6 +433,21 @@ io.on('connection', (socket) => {
 
     const reviews = session.getPendingReviews();
     callback({ reviews });
+  });
+
+  // HOST: Toggle individual answer correctness on results screen
+  socket.on('host:toggle-answer', ({ playerId, answerText, markCorrect, questionIndex }, callback) => {
+    const session = gameManager.getSessionBySocket(socket.id);
+    if (!session) return callback({ error: 'No active session' });
+
+    const result = session.toggleAnswerCorrectness(playerId, answerText, markCorrect, questionIndex);
+    if (result.error) return callback({ error: result.error });
+
+    // Emit updated results to all clients
+    const updatedResults = session.getQuestionResults();
+    io.to(`game:${session.pin}`).emit('game:results-updated', updatedResults);
+
+    callback(result);
   });
 
   // HOST: Review answer
@@ -337,15 +496,65 @@ io.on('connection', (socket) => {
       });
     }
 
-    // If all answered, auto-show results
+    // If all answered, auto-show results (unless delayed results is active)
     if (result.allAnswered) {
       if (session.timer) clearTimeout(session.timer);
-      session.state = 'results';
-      const results = session.getQuestionResults();
-      io.to(`game:${session.pin}`).emit('game:question-results', results);
+      
+      const currentQ = session.quiz.questions[session.currentQuestionIndex];
+      const roundNumber = currentQ?.roundNumber;
+      const shouldDelay = session.shouldDelayResults(roundNumber);
+      
+      if (!shouldDelay) {
+        // Normal flow: show results immediately
+        session.state = 'results';
+        const results = session.getQuestionResults();
+        io.to(`game:${session.pin}`).emit('game:question-results', results);
+      }
+      // If delayed results: do nothing, wait for host to click "Volgende"
     }
 
     callback(result);
+  });
+
+  // PLAYER: Anti-cheat - notify host when player looks away
+  socket.on('player:tab-hidden', ({ playerName }) => {
+    const pin = gameManager.socketToSession.get(socket.id);
+    if (!pin) return;
+    const session = gameManager.getSession(pin);
+    if (!session) return;
+    
+    console.log(`[Anti-cheat] ${playerName} tab hidden in game ${pin}`);
+    io.to(session.hostSocketId).emit('game:player-tab-hidden', { playerName });
+  });
+
+  socket.on('player:tab-visible', ({ playerName }) => {
+    const pin = gameManager.socketToSession.get(socket.id);
+    if (!pin) return;
+    const session = gameManager.getSession(pin);
+    if (!session) return;
+    
+    console.log(`[Anti-cheat] ${playerName} tab visible in game ${pin}`);
+    io.to(session.hostSocketId).emit('game:player-tab-visible', { playerName });
+  });
+
+  socket.on('player:window-blur', ({ playerName }) => {
+    const pin = gameManager.socketToSession.get(socket.id);
+    if (!pin) return;
+    const session = gameManager.getSession(pin);
+    if (!session) return;
+    
+    console.log(`[Anti-cheat] ${playerName} window blurred in game ${pin}`);
+    io.to(session.hostSocketId).emit('game:player-window-blur', { playerName });
+  });
+
+  socket.on('player:window-focus', ({ playerName }) => {
+    const pin = gameManager.socketToSession.get(socket.id);
+    if (!pin) return;
+    const session = gameManager.getSession(pin);
+    if (!session) return;
+    
+    console.log(`[Anti-cheat] ${playerName} window focused in game ${pin}`);
+    io.to(session.hostSocketId).emit('game:player-window-focus', { playerName });
   });
 
   // Disconnect

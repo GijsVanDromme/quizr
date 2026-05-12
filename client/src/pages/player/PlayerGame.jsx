@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
 import {
   Clock, CheckCircle, X, Trophy, Loader2,
-  Send, Zap, Flame, Star, Pause, Monitor, AlertTriangle, Award, Users, ZoomIn
+  Send, Zap, Flame, Star, Pause, Monitor, AlertTriangle, Award, Users, ZoomIn, Eye, Ghost
 } from 'lucide-react';
 
 // Image Lightbox Modal
@@ -96,6 +96,26 @@ function QuestionView({ question, onAnswer, timeLeft }) {
 
   // Show feedback after submitting
   if (submitted && result) {
+    // If delayed results, DON'T show any feedback - just show waiting/next question screen
+    // The player will see the batch results at the end of the round
+    if (result.delayedResults) {
+      // Don't show anything - just wait for next question
+      // Return a simple waiting state
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
+          <div className="text-center">
+            <CheckCircle className="w-16 h-16 text-quiz-green mx-auto mb-4 animate-bounce-in" />
+            <p className="text-2xl font-bold mb-2">Antwoord verzonden!</p>
+            <p className="text-gray-400 text-lg">Wacht op de volgende vraag...</p>
+            <div className="mt-6 flex items-center justify-center gap-2 text-gray-500">
+              <Monitor className="w-5 h-5" />
+              <span className="text-sm">Kijk naar het grote scherm</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const isPartial = result.totalExpected > 1 && result.correctCount > 0 && result.correctCount < result.totalExpected;
     const statusColor = isPartial ? 'bg-quiz-orange/20 text-quiz-orange' : (result.isCorrect ? 'bg-quiz-green/20 text-quiz-green' : 'bg-quiz-red/20 text-quiz-red');
     
@@ -165,24 +185,6 @@ function QuestionView({ question, onAnswer, timeLeft }) {
     );
   }
 
-  // Info slide - show text + image
-  if (question.type === 'info_slide') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
-        <h2 className="text-2xl md:text-3xl font-bold text-center mb-6 max-w-2xl leading-relaxed">
-          {question.questionText}
-        </h2>
-        {question.imageUrl && (
-          <img
-            src={question.imageUrl}
-            alt=""
-            className="max-w-full max-h-[60vh] rounded-2xl object-contain"
-          />
-        )}
-      </div>
-    );
-  }
-
   // Leaderboard slide - show trophy
   if (question.type === 'leaderboard_slide') {
     return (
@@ -217,7 +219,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
               <img
                 src={question.imageUrl?.startsWith('/') ? `${API_BASE}${question.imageUrl}` : question.imageUrl}
                 alt="Info slide"
-                className={`w-full max-h-64 rounded-xl object-contain transition-all duration-1000 ease-in-out ${question.animated ? 'animate-pulse scale-105 brightness-110' : ''}`}
+                className={`w-full max-h-64 rounded-xl object-contain transition-all duration-1000 ease-in-out ${question.animated ? 'animate-breathing' : ''}`}
               />
             </div>
           )}
@@ -298,8 +300,8 @@ function QuestionView({ question, onAnswer, timeLeft }) {
 
       {/* Free Type */}
       {question.type === 'free_type' && (
-        <div className="flex-1 flex flex-col px-4 pb-4 gap-2 min-h-0">
-          <div className="flex flex-col gap-2 flex-1">
+        <div className="flex flex-col px-4 pb-4 gap-3 overflow-y-auto">
+          <div className="flex flex-col gap-2">
             {Array.from({ length: question.inputFields || 1 }).map((_, i) => (
               <input
                 key={i}
@@ -319,7 +321,7 @@ function QuestionView({ question, onAnswer, timeLeft }) {
           <button
             onClick={handleFreeAnswer}
             disabled={!freeAnswers.some(a => a.trim())}
-            className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 rounded-xl font-bold text-base transition-colors disabled:opacity-30 flex items-center justify-center gap-2 flex-shrink-0"
+            className="w-full py-3.5 bg-primary-600 hover:bg-primary-700 rounded-xl font-bold text-base transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
           >
             <Send className="w-4 h-4" />
             Verstuur antwoord
@@ -646,6 +648,35 @@ function PausedScreen() {
   );
 }
 
+function AntiCheatOverlay({ message, onDismiss }) {
+  const messages = [
+    "Ik zie dat je even wegkijkt... 👀",
+    "Hopelijk heb je niks opgezocht! 🤔",
+    "Geen vals spelen, eerlijkheid duurt het langst! 😇",
+    "Ik heb alles gezien... 👻",
+    "Waar was je? 🧐",
+    "Eerlijkheid loont! 🌟"
+  ];
+  
+  const randomMessage = message || messages[Math.floor(Math.random() * messages.length)];
+  
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
+      <div className="bg-gradient-to-br from-primary-800 to-purple-900 border border-white/20 rounded-3xl p-8 max-w-md text-center animate-bounce-in">
+        <Ghost className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-pulse" />
+        <h2 className="text-2xl font-black mb-3">Oei! 😅</h2>
+        <p className="text-gray-300 text-lg mb-6">{randomMessage}</p>
+        <button
+          onClick={onDismiss}
+          className="px-6 py-3 bg-primary-600 hover:bg-primary-700 rounded-xl font-bold transition-colors"
+        >
+          Oké, ik beloof het! 🙏
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PlayerGame() {
   const navigate = useNavigate();
   const { socket } = useSocket();
@@ -653,10 +684,15 @@ export default function PlayerGame() {
   const [question, setQuestion] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [questionResults, setQuestionResults] = useState(null);
+  const [batchResults, setBatchResults] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [playerName, setPlayerName] = useState('');
+  const [playerEmoji, setPlayerEmoji] = useState('');
   const [reconnecting, setReconnecting] = useState(false);
   const [debugInfo, setDebugInfo] = useState({ lastEvent: 'none', eventCount: 0, socketId: '' });
+  const [antiCheatVisible, setAntiCheatVisible] = useState(false);
+  const [antiCheatMessage, setAntiCheatMessage] = useState('');
+  const [cheatCount, setCheatCount] = useState(0);
   
   // Use refs to avoid recreating handlers on every render
   const navigateRef = useRef(navigate);
@@ -674,8 +710,82 @@ export default function PlayerGame() {
       navigate('/play');
       return;
     }
-    setPlayerName(JSON.parse(stored).name);
+    const data = JSON.parse(stored);
+    setPlayerName(data.name);
+    setPlayerEmoji(data.emoji || '😀');
   }, [navigate]);
+
+  // Anti-cheat: Detect tab switching and window blur
+  useEffect(() => {
+    // Only active during question phase
+    if (gameState !== 'question') return;
+
+    let isTabHidden = false;
+    let isWindowBlurred = false;
+    let blurTimeout = null;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && !isTabHidden) {
+        isTabHidden = true;
+        setCheatCount(prev => prev + 1);
+        // Notify host that player is looking away
+        if (socket && socket.connected) {
+          socket.emit('player:tab-hidden', { playerName });
+        }
+      }
+      if (!document.hidden && isTabHidden) {
+        isTabHidden = false;
+        // Show anti-cheat overlay when returning
+        setAntiCheatMessage('Ik zie dat je even wegkijkt... 👀');
+        setAntiCheatVisible(true);
+        // Notify host that player returned
+        if (socket && socket.connected) {
+          socket.emit('player:tab-visible', { playerName });
+        }
+      }
+    };
+
+    const handleBlur = () => {
+      if (!isWindowBlurred) {
+        isWindowBlurred = true;
+        // Set a small delay to avoid false positives (alt-tab, etc.)
+        blurTimeout = setTimeout(() => {
+          if (isWindowBlurred) {
+            setCheatCount(prev => prev + 1);
+            // Notify host that player is looking away
+            if (socket && socket.connected) {
+              socket.emit('player:window-blur', { playerName });
+            }
+          }
+        }, 500);
+      }
+    };
+
+    const handleFocus = () => {
+      if (isWindowBlurred) {
+        clearTimeout(blurTimeout);
+        isWindowBlurred = false;
+        // Show anti-cheat overlay when returning
+        setAntiCheatMessage('Waar was je? 🧐');
+        setAntiCheatVisible(true);
+        // Notify host that player returned
+        if (socket && socket.connected) {
+          socket.emit('player:window-focus', { playerName });
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      if (blurTimeout) clearTimeout(blurTimeout);
+    };
+  }, [gameState, socket, playerName]);
 
   // Rejoin logic – handles page refresh AND mid-game reconnects
   useEffect(() => {
@@ -749,6 +859,13 @@ export default function PlayerGame() {
       setGameState('results');
     };
     
+    const onBatchResults = (br) => {
+      console.log('[DEBUG Player] ✅ game:batch-results', br?.roundTitle);
+      setDebugInfo(d => ({ ...d, lastEvent: 'batch-results', eventCount: d.eventCount + 1 }));
+      setBatchResults(br);
+      setGameState('batch-results');
+    };
+
     const onLeaderboard = ({ leaderboard: lb }) => {
       console.log('[DEBUG Player] ✅ game:leaderboard', lb?.length, 'players');
       setDebugInfo(d => ({ ...d, lastEvent: 'leaderboard', eventCount: d.eventCount + 1 }));
@@ -782,6 +899,7 @@ export default function PlayerGame() {
 
     socket.on('game:question', onQuestion);
     socket.on('game:question-results', onResults);
+    socket.on('game:batch-results', onBatchResults);
     socket.on('game:leaderboard', onLeaderboard);
     socket.on('game:finished', onFinished);
     socket.on('game:paused', onPaused);
@@ -793,6 +911,7 @@ export default function PlayerGame() {
       console.log('[DEBUG Player] 🔌 Cleaning up event handlers');
       socket.off('game:question', onQuestion);
       socket.off('game:question-results', onResults);
+      socket.off('game:batch-results', onBatchResults);
       socket.off('game:leaderboard', onLeaderboard);
       socket.off('game:finished', onFinished);
       socket.off('game:paused', onPaused);
@@ -831,6 +950,99 @@ export default function PlayerGame() {
     content = <WaitingScreen playerName={playerName} />;
   } else if (gameState === 'paused') {
     content = <PausedScreen />;
+  } else if (gameState === 'batch-results') {
+    if (!batchResults) {
+      content = (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
+          <Loader2 className="w-12 h-12 text-primary-400 animate-spin mb-4" />
+          <p className="text-xl font-bold mb-2">Ronde afgelopen!</p>
+          <p className="text-gray-400">Bekijk het grote scherm voor alle resultaten</p>
+        </div>
+      );
+    } else {
+      // Find player's results in batch
+      const playerResults = [];
+      batchResults.results?.forEach((result, idx) => {
+        const playerAnswer = result.answers?.find(a => a.playerName === playerName);
+        if (playerAnswer) {
+          playerResults.push({
+            questionNumber: result.questionNumber,
+            questionText: result.questionText,
+            isCorrect: playerAnswer.isCorrect,
+            points: playerAnswer.points,
+            answer: playerAnswer.answer,
+            answerDetails: playerAnswer.answerDetails
+          });
+        }
+      });
+
+      const totalPoints = playerResults.reduce((sum, r) => sum + (r.points || 0), 0);
+      const correctCount = playerResults.filter(r => r.isCorrect).length;
+
+      content = (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-primary-900 via-[#0f0f23] to-purple-900">
+          <div className="w-full max-w-2xl">
+            <div className="text-center mb-8">
+              <Trophy className="w-16 h-16 text-quiz-yellow mx-auto mb-4 animate-bounce-in" />
+              <h2 className="text-3xl font-black mb-2">{batchResults.roundTitle}</h2>
+              <p className="text-gray-400 text-lg mb-4">Jouw resultaten</p>
+              <div className="flex items-center justify-center gap-6 text-2xl font-bold">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-6 h-6 text-quiz-green" />
+                  <span>{correctCount} / {playerResults.length}</span>
+                </div>
+                <div className="flex items-center gap-2 text-quiz-yellow">
+                  <Star className="w-6 h-6" />
+                  <span>+{totalPoints} pt</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-8">
+              {playerResults.map((r, idx) => (
+                <div key={idx} className={`p-4 rounded-xl border ${r.isCorrect ? 'bg-quiz-green/10 border-quiz-green/30' : 'bg-quiz-red/10 border-quiz-red/30'}`}>
+                  <div className="flex items-start gap-3">
+                    {r.isCorrect ? (
+                      <CheckCircle className="w-5 h-5 text-quiz-green flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <X className="w-5 h-5 text-quiz-red flex-shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold mb-1">Vraag {r.questionNumber}</p>
+                      <p className="text-xs text-gray-400 truncate">{r.questionText}</p>
+                      {r.answerDetails && (r.answerDetails.matched?.length > 0 || r.answerDetails.unmatched?.length > 0) && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {r.answerDetails.matched?.map((m, i) => (
+                            <span key={`m${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-quiz-green/20 border border-quiz-green/40 rounded text-xs">
+                              ✓ {m}
+                            </span>
+                          ))}
+                          {r.answerDetails.unmatched?.map((u, i) => (
+                            <span key={`u${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-quiz-red/20 border border-quiz-red/40 rounded text-xs">
+                              ✗ {u}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-sm font-bold ${r.isCorrect ? 'text-quiz-green' : 'text-gray-500'}`}>
+                      +{r.points}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-center">
+              <p className="text-gray-400 text-sm flex items-center justify-center gap-2">
+                <Monitor className="w-4 h-4" />
+                Wacht op de volgende vraag...
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
   } else if (gameState === 'question') {
     content = <QuestionView key={question?.questionNumber} question={question} onAnswer={handleAnswer} timeLeft={timeLeft} />;
   } else if (gameState === 'results') {
@@ -843,5 +1055,23 @@ export default function PlayerGame() {
     content = <PlayerFinishedView leaderboard={leaderboard} playerName={playerName} />;
   }
 
-  return <>{content}<DebugOverlay /></>;
+  return (
+    <>
+      {antiCheatVisible && (
+        <AntiCheatOverlay 
+          message={antiCheatMessage} 
+          onDismiss={() => setAntiCheatVisible(false)} 
+        />
+      )}
+      <div className="pb-16">{content}</div>
+      {playerName && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0f0f23]/95 backdrop-blur-md border-t border-white/10 px-4 py-2.5 flex items-center gap-3">
+          {playerEmoji?.startsWith('/team-icons/')
+            ? <img src={playerEmoji} alt="" className="w-9 h-9 object-contain flex-shrink-0" />
+            : <span className="text-2xl flex-shrink-0">{playerEmoji || '😀'}</span>}
+          <span className="font-bold text-white truncate flex-1">{playerName}</span>
+        </div>
+      )}
+    </>
+  );
 }

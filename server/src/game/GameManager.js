@@ -70,6 +70,7 @@ export class GameSession {
     this.paused = false;
     this.questionStartTime = null;
     this.pendingReviews = []; // Answers flagged for manual review
+    this.delayedResults = []; // Store results for rounds with showResultsAfterRound
   }
 
   addPlayer(socketId, name, emoji) {
@@ -128,9 +129,36 @@ export class GameSession {
     }));
   }
 
+  shouldDelayResults(roundNumber) {
+    if (!roundNumber) {
+      console.log('[DEBUG] shouldDelayResults: no roundNumber');
+      return false;
+    }
+    const roundSettings = this.quiz.roundSettings || {};  // Changed from round_settings to roundSettings
+    const settings = roundSettings[roundNumber] || {};
+    const result = settings.showResultsAfterRound === true;
+    console.log('[DEBUG] shouldDelayResults: round', roundNumber, 'settings:', JSON.stringify(settings), 'result:', result);
+    return result;
+  }
+
+  isLastQuestionInRound(questionIndex) {
+    const currentQ = this.quiz.questions[questionIndex];
+    if (!currentQ || !currentQ.roundNumber) return false;
+    
+    const currentRound = currentQ.roundNumber;
+    const nextQ = this.quiz.questions[questionIndex + 1];
+    
+    // Last question if no next question or next question is different round
+    return !nextQ || nextQ.roundNumber !== currentRound || 
+           nextQ.type === 'info_slide' || nextQ.type === 'leaderboard_slide';
+  }
+
   getCurrentQuestion() {
     const q = this.quiz.questions[this.currentQuestionIndex];
     if (!q) return null;
+
+    const roundTitles = this.quiz.round_titles || {};
+    const roundTitle = q.roundNumber ? roundTitles[q.roundNumber] : null;
 
     const base = {
       questionNumber: this.currentQuestionIndex + 1,
@@ -140,6 +168,7 @@ export class GameSession {
       imageUrl: q.imageUrl,
       timeLimit: q.timeLimit || 20,
       roundNumber: q.roundNumber,
+      roundTitle: roundTitle,
     };
 
     if (q.type === 'multiple_choice') {
@@ -208,6 +237,26 @@ export class GameSession {
       state: 'question',
       question: this.getCurrentQuestion()
     };
+  }
+
+  jumpToQuestion(questionIndex) {
+    if (questionIndex < 0 || questionIndex >= this.quiz.questions.length) {
+      return { error: 'Invalid question index' };
+    }
+    this.currentQuestionIndex = questionIndex;
+    this.answerCount = 0;
+    this.delayedResults = []; // Reset delayed results when jumping
+
+    const q = this.quiz.questions[this.currentQuestionIndex];
+
+    if (q.type === 'leaderboard_slide') {
+      this.state = 'leaderboard';
+      return { state: 'leaderboard', leaderboard: this.getLeaderboard() };
+    }
+
+    this.state = 'question';
+    this.questionStartTime = Date.now();
+    return { state: 'question', question: this.getCurrentQuestion() };
   }
 
   submitAnswer(socketId, answer) {
@@ -291,6 +340,7 @@ export class GameSession {
         this.pendingReviews.push({
           playerId: socketId,
           playerName: player.name,
+          playerEmoji: player.emoji,
           questionIndex: this.currentQuestionIndex,
           flaggedAnswers: flaggedForReview,
           timestamp: Date.now()
@@ -342,15 +392,20 @@ export class GameSession {
 
     const totalExpected = question.type === 'free_type' ? (question.correctAnswers || []).length : 1;
 
+    // Check if this round has delayed results
+    const roundNumber = question.roundNumber;
+    const shouldDelay = this.shouldDelayResults(roundNumber);
+
     const result = {
-      isCorrect,
-      points,
-      totalScore: player.score,
-      streak: player.streak,
-      correctCount,
+      isCorrect: shouldDelay ? null : isCorrect,  // Hide correctness if delayed
+      points: shouldDelay ? null : points,        // Hide points if delayed
+      totalScore: shouldDelay ? null : player.score,  // Hide score if delayed
+      streak: shouldDelay ? null : player.streak,
+      correctCount: shouldDelay ? null : correctCount,
       totalExpected,
-      answerDetails: player.lastAnswerDetails || null,
+      answerDetails: shouldDelay ? null : (player.lastAnswerDetails || null),  // Hide details if delayed
       allAnswered: this.answerCount >= this.players.size,
+      delayedResults: shouldDelay,  // Flag to indicate results are delayed
     };
 
     return result;
@@ -366,6 +421,7 @@ export class GameSession {
         a => a.questionIndex === this.currentQuestionIndex
       );
       allAnswers.push({
+        playerId: player.id,
         playerName: player.name,
         emoji: player.emoji,
         answer: ans?.answer ?? null,
@@ -377,14 +433,18 @@ export class GameSession {
     });
 
     const result = {
+      questionIndex: this.currentQuestionIndex,
+      questionNumber: this.currentQuestionIndex + 1,
       questionText: question.questionText,
       type: question.type,
       correctAnswer: question.type === 'multiple_choice'
         ? question.correctAnswer
         : question.correctAnswers,
+      correctAnswers: question.correctAnswers,
       totalPlayers: this.players.size,
       correctCount,
       answers: allAnswers,
+      roundNumber: question.roundNumber,
     };
 
     if (question.type === 'multiple_choice') {
@@ -418,6 +478,88 @@ export class GameSession {
 
   getPendingReviews() {
     return this.pendingReviews.filter(r => r.questionIndex === this.currentQuestionIndex);
+  }
+
+  // Manually toggle a single answer correct/incorrect from results screen
+  toggleAnswerCorrectness(playerId, answerText, markCorrect, questionIndex = null) {
+    const player = this.players.get(playerId);
+    if (!player) return { error: 'Player not found' };
+
+    const qIndex = questionIndex !== null ? questionIndex : this.currentQuestionIndex;
+    const question = this.quiz.questions[qIndex];
+    if (question.type !== 'free_type') return { error: 'Not a free type question' };
+
+    const trimmedAns = answerText.toLowerCase().trim();
+    if (!player.lastAnswerDetails) {
+      player.lastAnswerDetails = { matched: [], unmatched: [], pendingReview: false };
+    }
+
+    const matched = player.lastAnswerDetails.matched || [];
+    const unmatched = player.lastAnswerDetails.unmatched || [];
+    
+    // Check current state
+    const isCurrentlyMatched = matched.some(m => m.toLowerCase().trim() === trimmedAns);
+
+    if (markCorrect && !isCurrentlyMatched) {
+      // Mark as correct: move from unmatched to matched, award 100 points
+      player.lastAnswerDetails.matched = [...matched, answerText];
+      player.lastAnswerDetails.unmatched = unmatched.filter(u => u.toLowerCase().trim() !== trimmedAns);
+      player.score += 100;
+    } else if (!markCorrect && isCurrentlyMatched) {
+      // Mark as incorrect: move from matched to unmatched, deduct 100 points
+      player.lastAnswerDetails.matched = matched.filter(m => m.toLowerCase().trim() !== trimmedAns);
+      player.lastAnswerDetails.unmatched = [...unmatched, answerText];
+      player.score = Math.max(0, player.score - 100);
+    } else {
+      return { error: 'No change needed' };
+    }
+
+    // Update answer record points
+    const answerRecord = player.answers.find(a => a.questionIndex === qIndex);
+    const wasCorrect = answerRecord?.isCorrect || false;
+    
+    if (answerRecord) {
+      const correctCount = player.lastAnswerDetails.matched.length;
+      answerRecord.points = correctCount * 100;
+      const correctAnswers = (question.correctAnswers || []);
+      answerRecord.isCorrect = correctCount === correctAnswers.length && correctCount > 0;
+      
+      // Update player.correctAnswers counter
+      if (!wasCorrect && answerRecord.isCorrect) {
+        player.correctAnswers++;
+      } else if (wasCorrect && !answerRecord.isCorrect) {
+        player.correctAnswers = Math.max(0, player.correctAnswers - 1);
+      }
+    }
+
+    // Recalculate isCorrect status
+    const correctAnswers = (question.correctAnswers || []);
+    const allCorrect = player.lastAnswerDetails.matched.length === correctAnswers.length 
+                      && correctAnswers.length > 0;
+
+    // Remove from pending reviews if applicable
+    const reviewIdx = this.pendingReviews.findIndex(
+      r => r.playerId === playerId && r.questionIndex === qIndex
+    );
+    if (reviewIdx !== -1) {
+      const review = this.pendingReviews[reviewIdx];
+      review.flaggedAnswers = review.flaggedAnswers.filter(
+        f => f.playerAnswer.toLowerCase().trim() !== trimmedAns
+      );
+      if (review.flaggedAnswers.length === 0) {
+        this.pendingReviews.splice(reviewIdx, 1);
+      }
+    }
+
+    return {
+      success: true,
+      playerName: player.name,
+      newScore: player.score,
+      isCorrect: allCorrect,
+      points: answerRecord?.points || 0,
+      matched: player.lastAnswerDetails.matched,
+      unmatched: player.lastAnswerDetails.unmatched
+    };
   }
 
   reviewAnswer(playerId, answerIndex, approved) {
