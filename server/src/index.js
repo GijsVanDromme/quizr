@@ -293,9 +293,9 @@ io.on('connection', (socket) => {
       console.log('[DEBUG] Question:', result.question?.questionText);
       io.to(`game:${session.pin}`).emit('game:question', result.question);
 
-      // Send leaderboard with updated scores to all players
+      // Send updated leaderboard to players so they see their current score
       const leaderboard = session.getLeaderboard();
-      io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard });
+      io.to(`game:${session.pin}`).emit('game:leaderboard-update', { leaderboard });
 
       // Info slides have no timer — host manually advances
       if (result.question.type !== 'info_slide') {
@@ -330,10 +330,6 @@ io.on('connection', (socket) => {
 
     if (result.state === 'question') {
       io.to(`game:${session.pin}`).emit('game:question', result.question);
-
-      // Send leaderboard with updated scores to all players
-      const leaderboard = session.getLeaderboard();
-      io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard });
 
       if (result.question.type !== 'info_slide') {
         const timeLimit = (result.question.timeLimit || 20) * 1000;
@@ -376,11 +372,6 @@ io.on('connection', (socket) => {
 
     if (result.state === 'question') {
       io.to(`game:${session.pin}`).emit('game:question', result.question);
-
-      // Send leaderboard with updated scores to all players
-      const leaderboard = session.getLeaderboard();
-      io.to(`game:${session.pin}`).emit('game:leaderboard', { leaderboard });
-
       if (result.question.type !== 'info_slide') {
         const timeLimit = (result.question.timeLimit || 20) * 1000;
         session.timer = setTimeout(() => {

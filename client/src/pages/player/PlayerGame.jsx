@@ -916,6 +916,15 @@ export default function PlayerGame() {
       }
     };
     
+    const onLeaderboardUpdate = ({ leaderboard: lb }) => {
+      console.log('[DEBUG Player] ✅ game:leaderboard-update', lb?.length, 'players');
+      // Update player score without changing game state
+      const myData = lb?.find(p => p.name === playerNameRef.current);
+      if (myData) {
+        setPlayerScore(myData.score || 0);
+      }
+    };
+
     const onHostDisconnected = () => {
       console.log('[DEBUG Player] ❌ Host disconnected');
       alert('De host heeft het spel verlaten');
@@ -926,6 +935,7 @@ export default function PlayerGame() {
     socket.on('game:question-results', onResults);
     socket.on('game:batch-results', onBatchResults);
     socket.on('game:leaderboard', onLeaderboard);
+    socket.on('game:leaderboard-update', onLeaderboardUpdate);
     socket.on('game:finished', onFinished);
     socket.on('game:paused', onPaused);
     socket.on('game:host-disconnected', onHostDisconnected);
@@ -938,6 +948,7 @@ export default function PlayerGame() {
       socket.off('game:question-results', onResults);
       socket.off('game:batch-results', onBatchResults);
       socket.off('game:leaderboard', onLeaderboard);
+      socket.off('game:leaderboard-update', onLeaderboardUpdate);
       socket.off('game:finished', onFinished);
       socket.off('game:paused', onPaused);
       socket.off('game:host-disconnected', onHostDisconnected);
