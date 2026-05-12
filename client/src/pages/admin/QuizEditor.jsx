@@ -1101,19 +1101,19 @@ export default function QuizEditor() {
                           setIsDraggingSection(false);
                         }}
                         className="flex items-center gap-3 px-4 py-2 bg-primary-600/20 border border-primary-500/30 rounded-xl cursor-grab active:cursor-grabbing hover:bg-primary-600/30 transition-all"
-                        onClick={() => !isDraggingSection && toggleRound(section.roundNumber)}
+                        onClick={() => !isDraggingSection && toggleRound(sectionId)}
                       >
                         <GripVertical className="w-5 h-5 text-gray-500" />
                         <Hash className="w-5 h-5 text-primary-400" />
                         <input
-                          value={quiz.roundTitles?.[section.roundNumber] ?? ''}
+                          value={quiz.roundTitles?.[sectionId] ?? ''}
                           onChange={(e) => setQuiz({
                             ...quiz,
-                            roundTitles: { ...(quiz.roundTitles || {}), [section.roundNumber]: e.target.value }
+                            roundTitles: { ...(quiz.roundTitles || {}), [sectionId]: e.target.value }
                           })}
                           onClick={(e) => e.stopPropagation()}
                           className="font-bold text-lg text-primary-300 bg-transparent border-none outline-none placeholder-primary-400/60"
-                          placeholder={`Ronde ${section.roundNumber}`}
+                          placeholder={`Ronde ${sectionIdx + 1}`}
                         />
                         <span className="text-sm text-gray-400">
                           ({section.questions.length} {section.questions.length === 1 ? 'vraag' : 'vragen'})
@@ -1123,13 +1123,13 @@ export default function QuizEditor() {
                           <label className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
                             <input
                               type="checkbox"
-                              checked={quiz.roundSettings?.[section.roundNumber]?.showResultsAfterRound === true}
+                              checked={quiz.roundSettings?.[sectionId]?.showResultsAfterRound === true}
                               onChange={(e) => setQuiz({
                                 ...quiz,
                                 roundSettings: {
                                   ...(quiz.roundSettings || {}),
-                                  [section.roundNumber]: {
-                                    ...(quiz.roundSettings?.[section.roundNumber] || {}),
+                                  [sectionId]: {
+                                    ...(quiz.roundSettings?.[sectionId] || {}),
                                     showResultsAfterRound: e.target.checked
                                   }
                                 }
@@ -1152,7 +1152,7 @@ export default function QuizEditor() {
                             <Plus className="w-3 h-3" />
                             Open vraag
                           </button>
-                          {collapsedRounds[section.roundNumber] ? (
+                          {collapsedRounds[sectionId] ? (
                             <ChevronDown className="w-5 h-5 text-gray-400" />
                           ) : (
                             <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -1161,7 +1161,7 @@ export default function QuizEditor() {
                       </div>
 
                       {/* Questions in round */}
-                      {!collapsedRounds[section.roundNumber] && section.questions.map(({ question: q, originalIndex: i }) => (
+                      {!collapsedRounds[sectionId] && section.questions.map(({ question: q, originalIndex: i }) => (
                         <QuestionForm
                           key={q.id || i}
                           question={{ ...q, quizId: quiz.id }}
