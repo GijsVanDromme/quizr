@@ -396,6 +396,9 @@ export default function QuizEditor() {
         return;
       }
       const data = await res.json();
+      
+      // Convert roundSettings from roundNumber keys to sectionId keys for UI
+      // This will be done lazily when sections are built, so just store as-is for now
       setQuiz(data);
 
       // Default: collapse all rounds and tussenslide sections
@@ -464,9 +467,23 @@ export default function QuizEditor() {
         }
       });
 
+      // Convert roundSettings from sectionId keys to roundNumber keys
+      const convertedRoundSettings = {};
+      const sections = buildOrderedSections();
+      sections.forEach(section => {
+        if (section.type === 'round') {
+          const sectionId = getSectionId(section);
+          const settings = quiz.roundSettings?.[sectionId];
+          if (settings) {
+            convertedRoundSettings[section.roundNumber] = settings;
+          }
+        }
+      });
+
       const quizToSave = {
         ...quiz,
-        questions: reconciledQuestions
+        questions: reconciledQuestions,
+        roundSettings: convertedRoundSettings
       };
       
       const res = await fetch(`${API_BASE}/api/quizzes/${id}`, {
@@ -872,6 +889,11 @@ export default function QuizEditor() {
     return null;
   };
 
+  // Get round settings for a section (check sectionId first, then roundNumber as fallback)
+  const getRoundSettings = (sectionId, roundNumber) => {
+    return quiz.roundSettings?.[sectionId] || quiz.roundSettings?.[roundNumber] || {};
+  };
+
   // Handle section drop - reorder sections and update quiz
   const handleSectionDrop = (dropIndex) => {
     if (!draggedSectionId) return;
@@ -1059,6 +1081,11 @@ export default function QuizEditor() {
             const sectionId = getSectionId(section);
             const isDragging = draggedSectionId === sectionId;
             
+            // Calculate display round number (only count actual round sections)
+            const roundDisplayNumber = section.type === 'round' 
+              ? orderedSections.slice(0, sectionIdx).filter(s => s.type === 'round').length + 1
+              : null;
+            
             return (
               <div key={sectionId || `section-${sectionIdx}`}>
                 {/* Drop zone BEFORE this section */}
@@ -1113,7 +1140,7 @@ export default function QuizEditor() {
                           })}
                           onClick={(e) => e.stopPropagation()}
                           className="font-bold text-lg text-primary-300 bg-transparent border-none outline-none placeholder-primary-400/60"
-                          placeholder={`Ronde ${sectionIdx + 1}`}
+                          placeholder={`Ronde ${roundDisplayNumber}`}
                         />
                         <span className="text-sm text-gray-400">
                           ({section.questions.length} {section.questions.length === 1 ? 'vraag' : 'vragen'})
@@ -1123,7 +1150,7 @@ export default function QuizEditor() {
                           <label className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
                             <input
                               type="checkbox"
-                              checked={quiz.roundSettings?.[sectionId]?.showResultsAfterRound === true}
+                              checked={getRoundSettings(sectionId, section.roundNumber)?.showResultsAfterRound === true}
                               onChange={(e) => setQuiz({
                                 ...quiz,
                                 roundSettings: {
