@@ -426,7 +426,7 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
           </button>
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-lg ${isPaused ? 'bg-quiz-yellow text-black' : (timeLeft <= 5 ? 'bg-quiz-red/20 text-quiz-red animate-pulse' : 'bg-white/10')}`}>
             <Clock className="w-5 h-5" />
-            {isPaused ? 'PAUSED' : `${timeLeft}s`}
+            {isPaused ? 'PAUSED' : `${Math.max(0, timeLeft)}s`}
           </div>
         </div>
       </div>
@@ -1066,7 +1066,7 @@ export default function HostGame() {
   const [answerCount, setAnswerCount] = useState(0);
   const [results, setResults] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(-1);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [currentQuestionNum, setCurrentQuestionNum] = useState(0);
   const [musicEnabled, setMusicEnabled] = useState(false);
