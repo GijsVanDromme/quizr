@@ -443,9 +443,19 @@ io.on('connection', (socket) => {
     const result = session.toggleAnswerCorrectness(playerId, answerText, markCorrect, questionIndex);
     if (result.error) return callback({ error: result.error });
 
+    // Get player's new score
+    const player = session.players.get(playerId);
+    const newScore = player?.score || 0;
+
     // Emit updated results to all clients
     const updatedResults = session.getQuestionResults();
     io.to(`game:${session.pin}`).emit('game:results-updated', updatedResults);
+
+    // Notify player about score update (live update in player bottom bar)
+    io.to(playerId).emit('game:score-updated', {
+      playerId,
+      newScore
+    });
 
     callback(result);
   });
