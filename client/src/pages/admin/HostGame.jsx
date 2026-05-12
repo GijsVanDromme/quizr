@@ -426,7 +426,7 @@ function QuestionScreen({ question, answerCount, totalPlayers, onShowResults, on
           </button>
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-lg ${isPaused ? 'bg-quiz-yellow text-black' : (timeLeft <= 5 ? 'bg-quiz-red/20 text-quiz-red animate-pulse' : 'bg-white/10')}`}>
             <Clock className="w-5 h-5" />
-            {isPaused ? 'PAUSED' : `${Math.max(0, timeLeft)}s`}
+            {isPaused ? 'PAUSED' : `${timeLeft}s`}
           </div>
         </div>
       </div>
@@ -1066,7 +1066,7 @@ export default function HostGame() {
   const [answerCount, setAnswerCount] = useState(0);
   const [results, setResults] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(-1);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [currentQuestionNum, setCurrentQuestionNum] = useState(0);
   const [musicEnabled, setMusicEnabled] = useState(false);
@@ -1120,24 +1120,12 @@ export default function HostGame() {
         if (prev <= 0 || isPaused) {
           return prev;
         }
-        const newTime = prev - 1;
-        return newTime;
+        return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(interval);
   }, [gameState, currentQuestion, isPaused]);
-
-  // Auto-advance when timer reaches 0 (separate effect to avoid circular deps)
-  useEffect(() => {
-    if (gameState === 'question' && timeLeft === 0 && !isPaused && socket) {
-      const timer = setTimeout(() => {
-        console.log('[DEBUG Host] Timer reached 0, auto-advancing to results');
-        showResults();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [gameState, timeLeft, isPaused, socket, showResults]);
 
   // Socket events
   useEffect(() => {
