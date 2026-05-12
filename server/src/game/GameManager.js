@@ -427,6 +427,7 @@ export class GameSession {
         answer: ans?.answer ?? null,
         isCorrect: ans?.isCorrect || false,
         points: ans?.points || 0,
+        totalScore: player.score,
         answerDetails: player.lastAnswerDetails || null, // Include matched/unmatched info
       });
       if (ans?.isCorrect) correctCount++;

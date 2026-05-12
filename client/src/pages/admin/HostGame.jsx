@@ -793,7 +793,7 @@ function BatchResultsScreen({ batchResults, onShowLeaderboard, onToggleAnswer })
                             <X className="w-5 h-5 text-quiz-red" />
                           )}
                           {isTeamIcon ? (
-                            <img src={`${API_BASE}${a.emoji}`} alt="team" className="w-7 h-7 object-contain" />
+                            <img src={a.emoji} alt="team" className="w-7 h-7 object-contain" />
                           ) : (
                             <span className="text-xl">{a.emoji || '😀'}</span>
                           )}
@@ -885,7 +885,7 @@ function BatchResultsScreen({ batchResults, onShowLeaderboard, onToggleAnswer })
                           <X className="w-5 h-5 text-quiz-red flex-shrink-0" />
                         )}
                         {isTeamIcon ? (
-                          <img src={`${API_BASE}${a.emoji}`} alt="team" className="w-7 h-7 object-contain" />
+                          <img src={a.emoji} alt="team" className="w-7 h-7 object-contain" />
                         ) : (
                           <span className="text-xl">{a.emoji || '😀'}</span>
                         )}

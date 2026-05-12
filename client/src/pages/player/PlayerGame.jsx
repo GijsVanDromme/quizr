@@ -699,10 +699,12 @@ export default function PlayerGame() {
   const navigateRef = useRef(navigate);
   const gameStateRef = useRef(gameState);
   const questionRef = useRef(question);
+  const playerNameRef = useRef(playerName);
   
   navigateRef.current = navigate;
   gameStateRef.current = gameState;
   questionRef.current = question;
+  playerNameRef.current = playerName;
 
   // Load player data on mount
   useEffect(() => {
@@ -859,9 +861,9 @@ export default function PlayerGame() {
       setQuestionResults(r);
       setGameState('results');
       // Update player score from results
-      const myAnswer = r.answers?.find(a => a.playerName === playerName);
-      if (myAnswer) {
-        setPlayerScore(myAnswer.totalScore || 0);
+      const myAnswer = r.answers?.find(a => a.playerName === playerNameRef.current);
+      if (myAnswer && myAnswer.totalScore != null) {
+        setPlayerScore(myAnswer.totalScore);
       }
     };
 
@@ -870,11 +872,13 @@ export default function PlayerGame() {
       setDebugInfo(d => ({ ...d, lastEvent: 'batch-results', eventCount: d.eventCount + 1 }));
       setBatchResults(br);
       setGameState('batch-results');
-      // Update player score from batch results
-      const myResults = br.results?.find(r => r.playerName === playerName);
-      if (myResults) {
-        setPlayerScore(myResults.totalScore || 0);
-      }
+      // Update player score from the last question's answer in batch
+      br.results?.forEach(result => {
+        const myAnswer = result.answers?.find(a => a.playerName === playerNameRef.current);
+        if (myAnswer && myAnswer.totalScore != null) {
+          setPlayerScore(myAnswer.totalScore);
+        }
+      });
     };
 
     const onLeaderboard = ({ leaderboard: lb }) => {
@@ -883,7 +887,7 @@ export default function PlayerGame() {
       setLeaderboard(lb);
       setGameState('leaderboard');
       // Update player score from leaderboard
-      const myData = lb?.find(p => p.name === playerName);
+      const myData = lb?.find(p => p.name === playerNameRef.current);
       if (myData) {
         setPlayerScore(myData.score || 0);
       }
@@ -895,7 +899,7 @@ export default function PlayerGame() {
       setLeaderboard(lb);
       setGameState('finished');
       // Update player score from leaderboard
-      const myData = lb?.find(p => p.name === playerName);
+      const myData = lb?.find(p => p.name === playerNameRef.current);
       if (myData) {
         setPlayerScore(myData.score || 0);
       }

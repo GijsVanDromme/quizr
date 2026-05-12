@@ -14,19 +14,13 @@ function QuestionForm({ question, onChange, onDelete, index, onDragStart, onDrag
     onChange({ ...question, [field]: value });
   };
 
-  const handleDuplicate = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/quizzes/${question.quizId}/questions/${question.id}/duplicate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (response.ok) {
-        const duplicatedQuestion = await response.json();
-        onDuplicate(duplicatedQuestion);
-      }
-    } catch (error) {
-      console.error('Failed to duplicate question:', error);
-    }
+  const handleDuplicate = () => {
+    const duplicated = {
+      ...question,
+      id: `temp-${Date.now()}`,
+      questionText: question.questionText + ' (kopie)',
+    };
+    onDuplicate(index, duplicated);
   };
 
   const updateOption = (optIndex, value) => {
@@ -507,7 +501,17 @@ export default function QuizEditor() {
       roundNumber,
       animated: false,
     };
-    setQuiz({ ...quiz, questions: [...quiz.questions, newQ] });
+    // Insert directly after the last question of this round (not at the end)
+    const questions = [...(quiz.questions || [])];
+    let insertIndex = questions.length; // default: end
+    for (let i = questions.length - 1; i >= 0; i--) {
+      if (questions[i].roundNumber === roundNumber) {
+        insertIndex = i + 1;
+        break;
+      }
+    }
+    questions.splice(insertIndex, 0, newQ);
+    setQuiz({ ...quiz, questions });
   };
 
   const addIntermediateSlide = () => {
@@ -696,9 +700,10 @@ export default function QuizEditor() {
     setDragOverIndex(null);
   };
 
-  const handleDuplicate = async (duplicatedQuestion) => {
-    // Refresh the quiz to get the updated questions list
-    await fetchQuiz();
+  const handleDuplicate = (index, duplicatedQuestion) => {
+    const questions = [...quiz.questions];
+    questions.splice(index + 1, 0, duplicatedQuestion);
+    setQuiz({ ...quiz, questions });
   };
 
   // Build sections array for drag & drop
