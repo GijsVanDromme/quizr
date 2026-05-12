@@ -468,6 +468,10 @@ io.on('connection', (socket) => {
     const result = session.reviewAnswer(playerId, answerIndex, approved);
     if (result.error) return callback({ error: result.error });
 
+    // Emit updated results to all clients (so host and players see the change)
+    const updatedResults = session.getQuestionResults();
+    io.to(`game:${session.pin}`).emit('game:results-updated', updatedResults);
+
     // Notify all clients about score update
     io.to(`game:${session.pin}`).emit('game:score-updated', {
       playerId,

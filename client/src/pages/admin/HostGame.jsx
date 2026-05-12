@@ -1120,12 +1120,17 @@ export default function HostGame() {
         if (prev <= 0 || isPaused) {
           return prev;
         }
-        return prev - 1;
+        const newTime = prev - 1;
+        // Auto-advance to results when timer reaches 0
+        if (newTime === 0) {
+          setTimeout(() => showResults(), 500); // Small delay for better UX
+        }
+        return newTime;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [gameState, currentQuestion, isPaused]);
+  }, [gameState, currentQuestion, isPaused, showResults]);
 
   // Socket events
   useEffect(() => {
